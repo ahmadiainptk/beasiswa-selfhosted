@@ -1,0 +1,140 @@
+---
+// path: src/pages/pengumuman/[beasiswaId].astro
+// Halaman publik: pengumuman hasil seleksi + daftar pendaftar + yang lolos
+import PublicLayout from "../../layouts/PublicLayout.astro";
+import { drizzle } from "drizzle-orm/d1";
+import { eq, desc, asc, and } from "drizzle-orm";
+import * as schema from "../../db/schema";
+import { beasiswa, pengumuman, pendaftaran, users } from "../../db/schema";
+
+const db = drizzle(Astro.locals.runtime?.env?.DB, { schema });
+const beasiswaId = parseInt(Astro.params.beasiswaId || '0');
+if (!beasiswaId) return Astro.redirect('/beasiswa');
+
+const bs = await db.select().from(beasiswa).where(eq(beasiswa.id, beasiswaId)).limit(1);
+if (bs.length === 0 || !bs[0].aktif) return Astro.redirect('/beasiswa');
+const b = bs[0];
+
+const pengRows = await db.select().from(pengumuman)
+  .where(and(eq(pengumuman.beasiswaId, beasiswaId), eq(pengumuman.published, 1)))
+  .orderBy(desc(pengumuman.publishedAt));
+const latest = pengRows[0];
+
+const pendRows = await db.select({
+  nama: users.namaLengkap,
+  nim: users.nim,
+  status: pendaftaran.status,
+}).from(pendaftaran)
+  .innerJoin(users, eq(pendaftaran.userId, users.id))
+  .where(eq(pendaftaran.beasiswaId, beasiswaId))
+  .orderBy(asc(users.namaLengkap));
+
+const lolos = pendRows.filter(p => p.status === 'accepted');
+
+const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+const fmtDateTime = (d: string | null) => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) + ' ' + new Date(d).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB' : null;
+
+const statusBadge = (st: string) => {
+  if (st === 'accepted') return '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"><span class="material-symbols-outlined text-sm">check_circle</span> LOLOS</span>';
+  if (st === 'rejected') return '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"><span class="material-symbols-outlined text-sm">cancel</span> Tidak Lolos</span>';
+  return '<span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"><span class="material-symbols-outlined text-sm">schedule</span> Menunggu Seleksi</span>';
+};
+---
+
+<PublicLayout title={latest?.judul || `Pengumuman ${b.nama}`} description={latest?.isi || undefined}>
+  <main class="max-w-[1280px] mx-auto px-gutter py-16">
+    <a href="/beasiswa" class="inline-flex items-center gap-2 text-primary hover:underline text-sm mb-8">
+      <span class="material-symbols-outlined text-lg">arrow_back</span>
+      Kembali ke daftar beasiswa
+    </a>
+
+    <div class="mb-10">
+      <p class="text-sm font-semibold tracking-wider text-primary uppercase mb-2 flex items-center gap-2">
+        <span class="material-symbols-outlined text-lg">campaign</span>
+        Pengumuman
+      </p>
+      <h1 class="text-3xl font-extrabold font-[Montserrat] text-on-surface">{latest?.judul || `Pengumuman ${b.nama}`}</h1>
+      <p class="text-outline mt-2">Beasiswa: <span class="font-semibold text-on-surface-variant">{b.nama}</span></p>
+      {latest?.publishedAt && <p class="text-xs text-outline-variant mt-1">Diterbitkan: {fmtDateTime(latest.publishedAt)}</p>}
+    </div>
+
+    {latest?.isi && (
+      <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 mb-8">
+        <span class="material-symbols-outlined text-primary align-middle mr-2">info</span>
+        <div class="mt-2 text-on-surface-variant leading-relaxed whitespace-pre-wrap">{latest.isi}</div>
+      </div>
+    )}
+
+    {latest?.skFileId && (
+      <div class="bg-primary-container/20 border border-primary/30 rounded-xl p-6 mb-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined text-primary text-2xl">description</span>
+          </div>
+          <div>
+            <p class="font-semibold text-on-surface">SK (Surat Keputusan)</p>
+            <p class="text-xs text-outline">{latest.skOriginalFilename || 'Unduh SK hasil seleksi'}</p>
+          </div>
+        </div>
+        <a href={`https://drive.google.com/file/d/${latest.skFileId}/view`} target="_blank" rel="noopener"
+          class="inline-flex items-center gap-2 bg-primary text-on-primary px-6 py-2.5 rounded-full text-sm font-semibold hover:opacity-90 transition shrink-0">
+          <span class="material-symbols-outlined text-lg">download</span>
+          Unduh SK (PDF)
+        </a>
+      </div>
+    )}
+
+    <div class="flex flex-wrap gap-4 mb-10">
+      <div class="flex-1 min-w-[180px] bg-surface-container-lowest rounded-xl border border-outline-variant p-5 text-center">
+        <p class="text-3xl font-extrabold text-on-surface">{pendRows.length}</p>
+        <p class="text-xs text-outline mt-1">Total Pendaftar</p>
+      </div>
+      <div class="flex-1 min-w-[180px] bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800 p-5 text-center">
+        <p class="text-3xl font-extrabold text-green-700 dark:text-green-300">{lolos.length}</p>
+        <p class="text-xs text-outline mt-1">Yang Lolos</p>
+      </div>
+    </div>
+
+    <div class="bg-surface-container-lowest rounded-xl border border-outline-variant overflow-hidden">
+      <div class="px-6 py-4 border-b border-outline-variant flex items-center justify-between">
+        <h2 class="text-lg font-bold text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined">how_to_reg</span>
+          Daftar Pendaftar & Hasil
+        </h2>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-outline border-b border-outline-variant">
+              <th class="px-6 py-3 font-semibold">No</th>
+              <th class="px-6 py-3 font-semibold">Nama</th>
+              <th class="px-6 py-3 font-semibold">NIM</th>
+              <th class="px-6 py-3 font-semibold">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pendRows.length === 0 ? (
+              <tr>
+                <td colspan="4" class="px-6 py-10 text-center text-outline">Belum ada pendaftar untuk beasiswa ini.</td>
+              </tr>
+            ) : (
+              pendRows.map((r, i) => (
+                <tr class="border-b border-outline-variant/50 hover:bg-surface-container-high/40 transition">
+                  <td class="px-6 py-3 text-outline">{i + 1}</td>
+                  <td class="px-6 py-3 font-medium text-on-surface">{r.nama}</td>
+                  <td class="px-6 py-3 text-on-surface-variant">{r.nim || '-'}</td>
+                  <td class="px-6 py-3" set:html={statusBadge(r.status)} />
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="text-xs text-outline-variant mt-6 flex items-center gap-1.5">
+      <span class="material-symbols-outlined text-sm">info</span>
+      Pengumuman ini merupakan pengumuman batch hasil seleksi. Untuk pertanyaan lebih lanjut hubungi Bagian Kemahasiswaan IAIN Pontianak.
+    </p>
+  </main>
+</PublicLayout>

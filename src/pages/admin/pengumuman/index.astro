@@ -1,0 +1,331 @@
+---
+// path: src/pages/admin/pengumuman/index.astro
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { verifyGardaToken } from "../../../lib/auth";
+
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+if (gardaAdmin.role !== 'superadmin') return Astro.redirect("/admin");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+---
+
+<AdminLayout title="Rilis Pengumuman" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="pengumuman">
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-extrabold text-on-surface">Rilis Pengumuman</h1>
+      <p class="text-outline mt-1">Buat dan terbitkan pengumuman hasil seleksi per beasiswa (batch, bukan per individu)</p>
+    </div>
+    <button id="btn-tambah" onclick="openModal()" class="inline-flex items-center gap-2 bg-primary hover:bg-primary text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+      <span class="material-symbols-outlined text-lg">add</span>
+      Buat Pengumuman
+    </button>
+  </div>
+
+  <Card title="Daftar Pengumuman">
+    <div id="pengumuman-list" class="space-y-3">
+      <p class="text-sm text-outline">Memuat...</p>
+    </div>
+  </Card>
+
+  <!-- Create/Edit Modal -->
+  <div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+    <div class="bg-surface-container-lowest rounded-xl shadow-xl max-w-2xl w-full p-6 my-8">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-title" class="text-lg font-bold text-on-surface">Buat Pengumuman</h3>
+        <button type="button" id="modal-close" class="text-outline hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="pengumuman-form" class="space-y-4">
+        <input type="hidden" name="id" />
+        <div>
+          <label class="block text-sm font-medium text-on-surface-variant mb-1.5">Beasiswa <span class="text-error">*</span></label>
+          <select name="beasiswa_id" required class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none">
+            <option value="">-- Pilih Beasiswa --</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-on-surface-variant mb-1.5">Judul Pengumuman <span class="text-error">*</span></label>
+          <input type="text" name="judul" required placeholder="Contoh: Pengumuman Hasil Seleksi KIP Kuliah 2026"
+            class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-on-surface-variant mb-1.5">Isi / Catatan</label>
+          <textarea name="isi" rows="4" placeholder="Narasi pengumuman, arahan selanjutnya, dll... (opsional)"
+            class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none"></textarea>
+          <p class="text-xs text-outline mt-1">Daftar pendaftar & yang lolos diambil otomatis dari data pendaftaran. Pengumuman ini tidak memilih individu satu per satu.</p>
+        </div>
+        <div class="pt-2 border-t border-outline-variant">
+          <label class="block text-sm font-medium text-on-surface-variant mb-1.5">SK (Surat Keputusan) — PDF</label>
+          <div class="flex items-center gap-3">
+            <label class="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-primary border border-primary/40 rounded-lg hover:bg-primary-container/20 cursor-pointer">
+              <span class="material-symbols-outlined text-lg">upload_file</span>
+              <span id="sk-upload-text">Unggah SK (PDF)</span>
+              <input type="file" id="sk-file" accept="application/pdf,.pdf" class="hidden" />
+            </label>
+            <span id="sk-file-name" class="text-xs text-outline truncate max-w-[260px]">Belum ada file</span>
+            <a id="sk-file-link" href="#" target="_blank" class="hidden text-xs text-primary hover:underline">Lihat</a>
+          </div>
+          <input type="hidden" name="sk_file_id" />
+          <input type="hidden" name="sk_original_filename" />
+          <input type="hidden" name="sk_mime_type" />
+          <input type="hidden" name="sk_file_size" />
+        </div>
+
+        <div class="flex gap-3 justify-end pt-2">
+          <button type="button" id="modal-cancel" class="px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition">Batal</button>
+          <button type="submit" id="btn-submit" class="px-4 py-2 bg-primary hover:bg-primary text-white text-sm font-medium rounded-lg transition">Simpan</button>
+        </div>
+        <div id="form-result" class="hidden"></div>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  var modal = document.getElementById('modal');
+  var modalTitle = document.getElementById('modal-title');
+  var form = document.getElementById('pengumuman-form');
+  var formResult = document.getElementById('form-result');
+  var listEl = document.getElementById('pengumuman-list');
+  var btnSubmit = document.getElementById('btn-submit');
+  var beasiswaSelect = form.querySelector('[name=beasiswa_id]');
+  var skFileInput = document.getElementById('sk-file');
+  var skFileName = document.getElementById('sk-file-name');
+  var skFileLink = document.getElementById('sk-file-link');
+  var skFileId = { val: null, name: null, mime: null, size: null };
+
+  function escAttr(s) { return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escHtml(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function openModal() {
+    form.reset();
+    skFileId = { val: null, name: null, mime: null, size: null };
+    skFileName.textContent = 'Belum ada file';
+    skFileLink.classList.add('hidden');
+    document.getElementById('sk-upload-text').textContent = 'Unggah SK (PDF)';
+    formResult.classList.add('hidden');
+    modalTitle.textContent = 'Buat Pengumuman';
+    btnSubmit.textContent = 'Simpan';
+    modal.classList.remove('hidden');
+  }
+
+  function closeModal() { modal.classList.add('hidden'); }
+  window.openModal = openModal;
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(); });
+
+  skFileInput.addEventListener('change', async function() {
+    var file = skFileInput.files && skFileInput.files[0];
+    if (!file) return;
+    var ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (file.type !== 'application/pdf' && ext !== 'pdf') {
+      alert('SK harus berupa file PDF');
+      skFileInput.value = '';
+      return;
+    }
+    skFileName.textContent = 'Mengunggah...';
+    document.getElementById('sk-upload-text').textContent = 'Unggah SK (PDF)';
+    var fd = new FormData();
+    fd.append('file', file);
+    try {
+      var res = await fetch('/api/admin/pengumuman-upload', { method: 'POST', body: fd });
+      var data = await res.json();
+      if (data.success) {
+        skFileId = { val: data.id, name: data.filename, mime: data.mimeType, size: data.size };
+        skFileName.textContent = data.filename;
+        skFileLink.href = data.url;
+        skFileLink.classList.remove('hidden');
+        document.getElementById('sk-upload-text').textContent = 'Ganti SK';
+      } else {
+        alert(data.message || 'Upload gagal');
+        skFileName.textContent = 'Belum ada file';
+      }
+    } catch (e) {
+      alert('Terjadi kesalahan jaringan');
+      skFileName.textContent = 'Belum ada file';
+    }
+  });
+
+  async function loadList() {
+    try {
+      const res = await fetch('/api/admin/pengumuman');
+      const data = await res.json();
+      if (!data.success) {
+        listEl.innerHTML = `<p class="text-sm text-error">${escHtml(data.message)}</p>`;
+        return;
+      }
+
+      // Isi dropdown beasiswa
+      beasiswaSelect.innerHTML = '<option value="">-- Pilih Beasiswa --</option>' +
+        (data.beasiswa || []).map(function(b) {
+          return `<option value="${b.id}">${escHtml(b.nama)}</option>`;
+        }).join('');
+
+      if (data.pengumuman.length === 0) {
+        listEl.innerHTML = `<div class="text-center py-8">
+          <span class="material-symbols-outlined text-4xl text-outline-variant mb-2">campaign</span>
+          <p class="text-sm text-outline">Belum ada pengumuman</p>
+        </div>`;
+        return;
+      }
+
+      listEl.innerHTML = data.pengumuman.map(function(p) {
+        return `
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-surface-container-lowest rounded-lg">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1 flex-wrap">
+              <h4 class="text-sm font-semibold text-on-surface">${escHtml(p.judul)}</h4>
+              <span class="px-2 py-0.5 text-xs rounded-full font-medium ${p.published ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high text-on-surface-variant'}">
+                ${p.published ? 'Terbit' : 'Draft'}
+              </span>
+              <span class="px-2 py-0.5 text-xs rounded-full bg-surface-container-high text-on-surface-variant">${escHtml(p.beasiswaNama || '-')}</span>
+            </div>
+            ${p.isi ? `<p class="text-xs text-outline line-clamp-2">${escHtml(p.isi)}</p>` : ''}
+            <p class="text-xs text-outline-variant mt-1">
+              Dibuat: ${fmtDateTime(p.createdAt)}
+              ${p.publishedAt ? ' &middot; Terbit: ' + fmtDateTime(p.publishedAt) : ''}
+              ${p.skOriginalFilename ? ' &middot; SK: ' + escHtml(p.skOriginalFilename) : ''}
+            </p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            ${p.published ? `
+              <a href="/pengumuman/${p.beasiswaId}" target="_blank" class="px-2 py-1 text-xs text-primary hover:bg-primary-container/20 rounded-lg font-medium transition">
+                <span class="material-symbols-outlined text-sm align-middle">open_in_new</span>
+                Lihat
+              </a>
+            ` : ''}
+            <button onclick='editPengumuman(${JSON.stringify(p).replace(/'/g, "&#39;")})' class="px-2 py-1 text-xs text-primary hover:bg-primary-container/20 rounded-lg font-medium transition">
+              <span class="material-symbols-outlined text-sm align-middle">edit</span>
+              Edit
+            </button>
+            <button onclick="togglePublish(${p.id}, ${p.published})" class="px-2 py-1 text-xs rounded-lg font-medium transition ${p.published ? 'text-secondary hover:bg-secondary-container/20' : 'text-primary hover:bg-primary-container/20'}">
+              <span class="material-symbols-outlined text-sm align-middle">${p.published ? 'toggle_off' : 'toggle_on'}</span>
+              ${p.published ? 'Turunkan' : 'Terbitkan'}
+            </button>
+            <button onclick="deletePengumuman(${p.id})" class="px-2 py-1 text-xs text-error hover:bg-error-container/20 rounded-lg font-medium transition">
+              <span class="material-symbols-outlined text-sm align-middle">delete</span>
+            </button>
+          </div>
+        </div>
+      `;
+      }).join('');
+    } catch (err) {
+      listEl.innerHTML = '<p class="text-sm text-error">Gagal memuat data</p>';
+    }
+  }
+
+  function fmtDateTime(d) {
+    if (!d) return '-';
+    var dt = new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) +
+      ' ' + dt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+  }
+
+  window.editPengumuman = function(p) {
+    beasiswaSelect.value = p.beasiswaId || '';
+    form.querySelector('[name=id]').value = p.id;
+    form.querySelector('[name=judul]').value = p.judul || '';
+    form.querySelector('[name=isi]').value = p.isi || '';
+    if (p.skFileId) {
+      skFileId = { val: p.skFileId, name: p.skOriginalFilename, mime: p.skMimeType, size: p.skFileSize };
+      skFileName.textContent = p.skOriginalFilename || 'File';
+      skFileLink.href = 'https://drive.google.com/file/d/' + p.skFileId + '/view';
+      skFileLink.classList.remove('hidden');
+      document.getElementById('sk-upload-text').textContent = 'Ganti SK';
+    } else {
+      skFileId = { val: null, name: null, mime: null, size: null };
+      skFileName.textContent = 'Belum ada file';
+      skFileLink.classList.add('hidden');
+      document.getElementById('sk-upload-text').textContent = 'Unggah SK (PDF)';
+    }
+    formResult.classList.add('hidden');
+    modalTitle.textContent = 'Edit Pengumuman';
+    btnSubmit.textContent = 'Simpan Perubahan';
+    modal.classList.remove('hidden');
+  };
+
+  window.togglePublish = async function(id, currentPublished) {
+    try {
+      const res = await fetch('/api/admin/pengumuman', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: id, published: currentPublished ? 0 : 1 }),
+      });
+      const data = await res.json();
+      if (data.success) loadList();
+      else alert(data.message);
+    } catch { alert('Terjadi kesalahan'); }
+  };
+
+  window.deletePengumuman = async function(id) {
+    if (!confirm('Hapus pengumuman ini? (SK tetap tersimpan di Google Drive)')) return;
+    try {
+      const res = await fetch('/api/admin/pengumuman?id=' + id, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success) loadList();
+      else alert(data.message);
+    } catch { alert('Terjadi kesalahan'); }
+  };
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Menyimpan...';
+
+    var id = form.querySelector('[name=id]').value;
+    var payload = {
+      beasiswaId: Number(form.querySelector('[name=beasiswa_id]').value),
+      judul: form.querySelector('[name=judul]').value,
+      isi: form.querySelector('[name=isi]').value,
+      skFileId: skFileId.val,
+      skOriginalFilename: skFileId.name,
+      skMimeType: skFileId.mime,
+      skFileSize: skFileId.size,
+    };
+
+    try {
+      var res;
+      if (id) {
+        payload.id = Number(id);
+        res = await fetch('/api/admin/pengumuman', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch('/api/admin/pengumuman', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+      var data = await res.json();
+      if (data.success) {
+        closeModal();
+        loadList();
+      } else {
+        formResult.classList.remove('hidden');
+        formResult.innerHTML = `<p class="text-sm text-error">${escHtml(data.message || 'Gagal')}</p>`;
+      }
+    } catch (err) {
+      formResult.classList.remove('hidden');
+      formResult.innerHTML = '<p class="text-sm text-error">Terjadi kesalahan</p>';
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = id ? 'Simpan Perubahan' : 'Simpan';
+    }
+  });
+
+  loadList();
+</script>

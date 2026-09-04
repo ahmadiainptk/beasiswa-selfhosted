@@ -1,0 +1,233 @@
+---
+// path: src/pages/admin/pendaftaran/index.astro
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq, desc, sql } from 'drizzle-orm';
+import * as schema from '../../../db/schema';
+import { users } from '../../../db/schema';
+import { verifyGardaToken } from "../../../lib/auth";
+
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+const url = new URL(Astro.request.url);
+const statusFilter = url.searchParams.get('status') || 'pending'; // default: menunggu verifikasi
+const search = url.searchParams.get('q') || '';
+const page = Math.max(1, parseInt(url.searchParams.get('page') || '1'));
+const perPage = Math.min(50, Math.max(10, parseInt(url.searchParams.get('per_page') || '10')));
+
+// ── Status counts — via SQL COUNT, bukan fetch-all ke JS ──
+const statusCounts = {
+  pending: 0,
+  verified: 0,
+  rejected: 0,
+  total: 0,
+};
+// SQL: hitung total dari 3 status relevan (pending+verified+rejected) + per status
+const countRows = await db.select({
+  profileStatus: users.profileStatus,
+  c: sql<number>`COUNT(*)`,
+}).from(users).where(
+  sql`${users.role} = 'mahasiswa' AND ${users.profileStatus} IN ('pending','verified','rejected')`
+).groupBy(users.profileStatus);
+for (const row of countRows) {
+  if (row.profileStatus === 'pending') statusCounts.pending = Number(row.c);
+  if (row.profileStatus === 'verified') statusCounts.verified = Number(row.c);
+  if (row.profileStatus === 'rejected') statusCounts.rejected = Number(row.c);
+}
+statusCounts.total = statusCounts.pending + statusCounts.verified + statusCounts.rejected;
+
+// ── Server-side filter conditions di SQL (bukan JS) ──
+const conds = [eq(users.role, 'mahasiswa')];
+// Wajib filter status ke 3 relevan (kecuali 'all' kalau statusFilter kosong)
+if (statusFilter && statusFilter !== 'all') {
+  conds.push(eq(users.profileStatus, statusFilter));
+}
+if (search) {
+  const q = search.toLowerCase();
+  const like = `%${q}%`;
+  conds.push(sql`(LOWER(${users.namaLengkap}) LIKE ${like} OR LOWER(${users.nim}) LIKE ${like}) OR LOWER(${users.nik}) LIKE ${like}`);
+}
+
+// ── Total filtered (untuk pagination indicator) — COUNT dengan where ──
+const totalRow = await db.select({ c: sql<number>`COUNT(*)` })
+  .from(users).where(sql.join(conds, sql` AND `));
+const totalFiltered = Number(totalRow[0]?.c || 0);
+const totalPages = Math.max(1, Math.ceil(totalFiltered / perPage));
+const safePage = Math.min(page, totalPages);
+const offset = (safePage - 1) * perPage;
+
+// ── Paged rows — limit + offset DI SQL ──
+const paged = await db.select({
+  id: users.id, nama: users.namaLengkap, nim: users.nim, nik: users.nik, email: users.email,
+  profileStatus: users.profileStatus, profileStep: users.profileStep,
+  profileSubmittedAt: users.profileSubmittedAt, createdAt: users.createdAt,
+}).from(users)
+  .where(sql.join(conds, sql` AND `))
+  .orderBy(desc(users.createdAt))
+  .limit(perPage)
+  .offset(offset);
+
+const statusLabels: Record<string, { label: string; color: string }> = {
+  incomplete: { label: 'Belum Lengkap', color: 'amber' },
+  pending: { label: 'Menunggu', color: 'blue' },
+  verified: { label: 'Terverifikasi', color: 'green' },
+  rejected: { label: 'Ditolak', color: 'red' },
+};
+
+function buildUrl(params: Record<string, string>) {
+  const u = new URL(Astro.request.url);
+  for (const [k, v] of Object.entries(params)) {
+    if (v) u.searchParams.set(k, v);
+    else u.searchParams.delete(k);
+  }
+  return u.pathname + u.search;
+}
+---
+
+<AdminLayout title="Profil Mahasiswa" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="pendaftaran">
+  <div class="mb-6">
+    <h1 class="text-2xl font-extrabold text-on-surface">Profil Mahasiswa</h1>
+    <p class="text-outline mt-1">Verifikasi data profil mahasiswa (SPAN-PTKIN 2026)</p>
+  </div>
+
+  <!-- Status Summary Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    {[
+      { label: 'Jumlah Semua', count: statusCounts.total, color: 'slate', icon: 'group', href: buildUrl({ status: 'all', page: '1' }), active: statusFilter === 'all' || !statusFilter },
+      { label: 'Menunggu', count: statusCounts.pending, color: 'blue', icon: 'pending', href: buildUrl({ status: 'pending', page: '1' }), active: statusFilter === 'pending' },
+      { label: 'Terverifikasi', count: statusCounts.verified, color: 'green', icon: 'verified', href: buildUrl({ status: 'verified', page: '1' }), active: statusFilter === 'verified' },
+      { label: 'Ditolak', count: statusCounts.rejected, color: 'red', icon: 'cancel', href: buildUrl({ status: 'rejected', page: '1' }), active: statusFilter === 'rejected' },
+    ].map(card => (
+      <a href={card.href} class:list={[
+        'rounded-xl border p-4 transition hover:shadow-md',
+        card.active
+          ? 'border-' + card.color + '-300 dark:border-' + card.color + '-700 bg-' + card.color + '-50 dark:bg-' + card.color + '-900/20'
+          : 'border-outline-variant bg-surface-container-lowest',
+      ]}>
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-medium text-outline">{card.label}</span>
+          <span class="material-symbols-outlined text-lg text-outline-variant">{card.icon}</span>
+        </div>
+        <p class="text-2xl font-bold text-on-surface mt-1">{card.count}</p>
+      </a>
+    ))}
+  </div>
+
+  <!-- Filter Bar -->
+  <Card class="mb-6">
+    <form method="GET" class="flex flex-col sm:flex-row gap-3">
+      <input type="hidden" name="status" value={statusFilter} />
+      <input type="hidden" name="per_page" value={String(perPage)} />
+      <input type="text" name="q" value={search} placeholder="Cari nama, NIM, NIK, email..."
+        class="flex-1 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none" />
+      <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary text-white text-sm font-medium rounded-lg transition">
+        Cari
+      </button>
+    </form>
+  </Card>
+
+  <!-- Table -->
+  <Card>
+    {paged.length === 0 ? (
+      <div class="text-center py-12">
+        <span class="material-symbols-outlined text-5xl text-outline-variant dark:text-on-surface-variant mb-3">inbox</span>
+        <p class="text-outline">Tidak ada data</p>
+      </div>
+    ) : (
+      <>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-outline-variant">
+                <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">NIK</th>
+                <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Nama</th>
+                <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Status</th>
+                <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Step</th>
+                <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Submit</th>
+                <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {paged.map((u) => {
+                const sl = statusLabels[u.profileStatus] || { label: u.profileStatus, color: 'slate' };
+                return (
+                  <tr class="border-b border-slate-100 border-outline-variant hover:bg-surface hover:bg-surface-container-high/50">
+                    <td class="py-3 px-3 text-on-surface font-mono text-xs">{u.nik || '-'}</td>
+                    <td class="py-3 px-3 text-on-surface font-medium">{u.nama}</td>
+                    <td class="py-3 px-3">
+                      <span class:list={[
+                        'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                        sl.color === 'amber' && 'bg-secondary-container text-on-secondary-container',
+                        sl.color === 'blue' && 'bg-primary-container text-on-primary-container',
+                        sl.color === 'green' && 'bg-primary-container text-on-primary-container',
+                        sl.color === 'red' && 'bg-error-container text-on-error-container',
+                      ]}>{sl.label}</span>
+                    </td>
+                    <td class="py-3 px-3 text-outline">{u.profileStep || 0}/7</td>
+                    <td class="py-3 px-3 text-outline text-xs">{u.profileSubmittedAt ? new Date(u.profileSubmittedAt).toLocaleDateString('id-ID') : '-'}</td>
+                    <td class="py-3 px-3">
+                      <a href={`/admin/pendaftaran/${u.id}`} class="text-primary hover:text-primary font-medium text-sm">Detail</a>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-outline-variant">
+          <div class="flex items-center gap-2 text-sm text-outline">
+            <span>Baris per halaman:</span>
+            {[10, 20, 50].map(n => (
+              <a href={buildUrl({ per_page: String(n), page: '1', status: statusFilter, q: search })}
+                class:list={[
+                  'px-2 py-0.5 rounded text-xs font-medium',
+                  perPage === n ? 'bg-primary text-white' : 'bg-surface-container-high hover:bg-surface-container-high hover:bg-surface-container-high',
+                ]}>{n}</a>
+            ))}
+          </div>
+
+          <div class="flex items-center gap-2 text-sm">
+            <span class="text-outline">
+              {totalFiltered > 0 ? `${offset + 1}-${Math.min(offset + perPage, totalFiltered)} dari ${totalFiltered}` : '0 data'}
+            </span>
+            <div class="flex gap-1">
+              {safePage > 1 ? (
+                <a href={buildUrl({ page: String(safePage - 1), per_page: String(perPage), status: statusFilter, q: search })}
+                  class="px-2 py-1 rounded border border-outline-variant border-outline-variant hover:bg-surface-container-high hover:bg-surface-container-high text-on-surface-variant">
+                  <span class="material-symbols-outlined text-sm">arrow_back</span>
+                </a>
+              ) : (
+                <span class="px-2 py-1 rounded border border-outline-variant text-outline-variant dark:text-on-surface-variant">
+                  <span class="material-symbols-outlined text-sm">arrow_back</span>
+                </span>
+              )}
+              <span class="px-2 py-1 text-on-surface-variant">{safePage}/{totalPages || 1}</span>
+              {safePage < totalPages ? (
+                <a href={buildUrl({ page: String(safePage + 1), per_page: String(perPage), status: statusFilter, q: search })}
+                  class="px-2 py-1 rounded border border-outline-variant border-outline-variant hover:bg-surface-container-high hover:bg-surface-container-high text-on-surface-variant">
+                  <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                </a>
+              ) : (
+                <span class="px-2 py-1 rounded border border-outline-variant text-outline-variant dark:text-on-surface-variant">
+                  <span class="material-symbols-outlined text-sm">arrow_forward</span>
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </>
+    )}
+  </Card>
+</AdminLayout>

@@ -1,0 +1,22 @@
+# Beasiswa Self-Hosted — systemd unit
+# Contoh unit service. Salin / sesuaikan jalur di bawah.
+#   sudo cp deploy/beasiswa.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now beasiswa
+
+[Unit]
+Description=Beasiswa IAIN Pontianak (self-hosted)
+After=network.target
+
+[Service]
+Type=simple
+# Ganti user & jalur sesuai server Anda
+User=www-data
+WorkingDirectory=/srv/beasiswa-selfhosted
+EnvironmentFile=/srv/beasiswa-selfhosted/.env
+ExecStart=/usr/bin/node /srv/beasiswa-selfhosted/dist/server/entry.mjs
+Restart=on-failure
+RestartSec=5
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

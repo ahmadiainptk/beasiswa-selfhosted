@@ -1,0 +1,2422 @@
+---
+// path: src/pages/mahasiswa/form/[step].astro
+import MahasiswaLayout from "../../../layouts/MahasiswaLayout.astro";
+import Card from "../../../components/ui/Card.astro";
+import FileUploadBox from "../../../components/ui/FileUploadBox.astro";
+
+import { drizzle } from "drizzle-orm/d1";
+import { eq } from "drizzle-orm";
+import * as schema from "../../../db/schema";
+import {
+  sessions,
+  users,
+  identitasPribadi,
+  riwayatPendidikan,
+  prestasiTahfidz,
+  identitasKeluarga,
+  kondisiRumah,
+  domisiliOrtu,
+  kebutuhanKhusus,
+  dokumen,
+} from "../../../db/schema";
+import { getCookieName } from "../../../lib/auth";
+
+// Auth check
+const token = Astro.cookies.get(getCookieName())?.value;
+if (!token || !Astro.locals.runtime.env?.DB) {
+  return Astro.redirect("/login");
+}
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+const session = await db
+  .select()
+  .from(sessions)
+  .innerJoin(users, eq(sessions.userId, users.id))
+  .where(eq(sessions.token, token))
+  .limit(1);
+
+if (
+  session.length === 0 ||
+  new Date(session[0].sessions.expiresAt) < new Date()
+) {
+  return Astro.redirect("/login");
+}
+
+const user = session[0].users;
+
+// Step dimulai dari 1 (SPA: navigasi step via JS, bukan reload per step)
+const step = parseInt(Astro.url.searchParams.get('step') || '1');
+if (step < 1 || step > 7) {
+  return Astro.redirect("/mahasiswa/form?step=1");
+}
+
+// Build stepData per section (semua step) — render SPA tanpa reload per step
+let stepData: Record<number, any> = {};
+let uploadedFiles: Record<string, { id: string; name: string }> = {};
+const allSectionTables = [identitasPribadi, riwayatPendidikan, prestasiTahfidz, identitasKeluarga, kondisiRumah, domisiliOrtu, kebutuhanKhusus];
+let sectionRows: any[] = [];
+try {
+  sectionRows = await Promise.all(
+    allSectionTables.map((t) => db.select().from(t).where(eq(t.userId, user.id)).limit(1))
+  );
+} catch (e: any) {
+  console.error('SECTION_QUERY_ERR:', e?.message || e);
+  sectionRows = allSectionTables.map(() => []);
+}
+sectionRows.forEach((rows, i) => {
+  const N = i + 1;
+  if (rows.length > 0) {
+    stepData[N] = { ...rows[0] };
+    delete stepData[N].id;
+    delete stepData[N].userId;
+    delete stepData[N].createdAt;
+    delete stepData[N].updatedAt;
+  } else {
+    stepData[N] = {};
+  }
+});
+
+// Merge users table data as fallback (for step 1 fields)
+if (stepData[1] && !stepData[1].nama) stepData[1].nama = user.namaLengkap;
+if (stepData[1] && !stepData[1].nik) stepData[1].nik = user.nik;
+if (stepData[1] && !stepData[1].nim) stepData[1].nim = user.nim;
+
+// Load uploaded files from dokumen table
+const docs = await db
+  .select()
+  .from(dokumen)
+  .where(eq(dokumen.userId, user.id));
+for (const doc of docs) {
+  if (doc.r2Key) {
+    uploadedFiles[doc.fieldName] = {
+      id: doc.r2Key,
+      name: doc.originalFilename || doc.fieldName,
+    };
+  }
+}
+
+// Determine which sections actually have data (for the stepper check mark).
+// A section is "completed" only if it has REAL content. A row can exist with
+// all-null values (the save API inserts a row even on an empty "Simpan & Lanjut"
+// click), so row-existence alone produces false check marks.
+const completedSteps = new Set<number>();
+{
+  const metaKeys = new Set(['id', 'userId', 'createdAt', 'updatedAt']);
+  sectionRows.forEach((rows, i) => {
+    if (rows.length === 0) return;
+    const row = rows[0];
+    // Mark complete only if at least one data column has meaningful content
+    // (non-empty string, or a non-zero number). Metadata keys are excluded.
+    const hasContent = Object.entries(row).some(([key, value]) => {
+      if (metaKeys.has(key)) return false;
+      if (typeof value === 'string') return value.trim() !== '';
+      if (typeof value === 'number') return value !== 0;
+      return value !== null && value !== undefined;
+    });
+    if (hasContent) completedSteps.add(i + 1);
+  });
+}
+
+// Step config
+const steps = [
+  { num: 1, label: "Identitas Pribadi", icon: "person" },
+  { num: 2, label: "Riwayat Pendidikan", icon: "school" },
+  { num: 3, label: "Prestasi & Tahfidz", icon: "emoji_events" },
+  { num: 4, label: "Identitas Keluarga", icon: "family_restroom" },
+  { num: 5, label: "Kondisi Rumah", icon: "home" },
+  { num: 6, label: "Domisili Ortu", icon: "location_on" },
+  { num: 7, label: "Kebutuhan Khusus", icon: "accessibility" },
+];
+
+const currentStepConfig = steps[step - 1];
+---
+
+<MahasiswaLayout
+  title={`Form - ${currentStepConfig.label}`}
+  namaUser={user.namaLengkap}
+>
+  <!-- Stepper -->
+  <div class="mb-8">
+    <div class="flex items-center justify-between max-w-3xl mx-auto">
+      {
+        steps.map((s, i) => (
+          <>
+            <a
+              href={`/mahasiswa/form?step=${s.num}`}
+              data-step-link={s.num}
+              class:list={[
+                "flex flex-col items-center gap-1 group stepper-item cursor-pointer",
+                completedSteps.has(s.num) && s.num !== step
+                  ? "text-primary completed"
+                  : s.num === step
+                    ? "text-primary stepper-active"
+                    : "text-outline-variant",
+              ]}
+            >
+              <div
+                class:list={[
+                  "w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 transition stepper-dot",
+                  s.num === step
+                    ? "border-blue-600 bg-primary text-white stepper-active-dot"
+                    : completedSteps.has(s.num)
+                      ? "border-green-600 bg-primary text-white"
+                      : "border-outline-variant border-outline-variant text-outline-variant",
+                ]}
+              >
+                {completedSteps.has(s.num) && s.num !== step ? (
+                  <span class="material-symbols-outlined text-lg">check</span>
+                ) : (
+                  s.num
+                )}
+              </div>
+              <span class="text-xs font-medium hidden sm:block">{s.label}</span>
+            </a>
+            {i < steps.length - 1 && (
+              <div
+                class:list={[
+                  "flex-1 h-0.5 mx-2",
+                  s.num < step ? "bg-primary" : "bg-surface-container-high",
+                ]}
+              />
+            )}
+          </>
+        ))
+      }
+    </div>
+  </div>
+
+  <!-- Pengecekan Desil DTSEN — petunjuk wajib sebelum melengkapi formulir -->
+  <div class="mb-6">
+    <div class="flex items-start gap-3 p-4 rounded-xl border border-primary/30 bg-primary-container/20">
+      <span class="material-symbols-outlined text-primary shrink-0 mt-0.5">info</span>
+      <div class="flex-1 space-y-1">
+        <p class="text-sm font-semibold text-on-surface">
+          Cek Desil DTSEN Sebelum Melengkapi Formulir
+        </p>
+        <p class="text-xs text-on-surface-variant">
+          Desil DTSEN menjadi salah satu dasar <span class="font-medium">verifikasi kebenaran data</span> dan
+          <span class="font-medium">kelayakan penerimaan beasiswa</span>. Sebelum mengisi formulir, silakan:
+        </p>
+        <ol class="list-decimal list-inside text-xs text-on-surface-variant space-y-0.5 mt-1">
+          <li>
+            Lakukan pengecekan desil di
+            <a
+              href="https://dtsen-form.bps.go.id/indonesia-pintar"
+              target="_blank"
+              rel="noopener"
+              class="text-primary underline font-medium hover:opacity-80"
+            >dtsen-form.bps.go.id/indonesia-pintar</a>.
+          </li>
+          <li>
+            Jika terdapat <span class="font-medium">kesalahan data</span> pada data Anda di BPS,
+            lakukan <span class="font-medium">pembaruan data</span> (update) melalui menu yang tersedia di halaman tersebut.
+          </li>
+          <li>
+            Pastikan data yang Anda isi pada formulir ini sesuai dengan data terbaru di DTSEN.
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- Form Card -->
+  <Card title={`Bagian ${step}: ${currentStepConfig.label}`}>
+    <form id="form-wizard" class="space-y-6">
+      <input type="hidden" name="step" value={step} />
+
+      <!-- Form fields rendered by step -->
+      <div id="form-fields">
+        <!-- Step 1: Identitas Pribadi -->
+
+        <section data-step="1" data-step-panel class="hidden">
+            <div class="space-y-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nama Lengkap <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nama"
+                    value={stepData[1].nama || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    NIK (KK/KTP) <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nik"
+                    value={stepData[1].nik || ""}
+                    maxlength="16"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    NIM <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nim"
+                    value={stepData[1].nim || user.nim || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Tempat Lahir <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="tempat_lahir"
+                    value={stepData[1].tempatLahir || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Tanggal Lahir <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    name="tanggal_lahir"
+                    value={stepData[1].tanggalLahir || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jenis Kelamin <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="jenis_kelamin"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    <option
+                      value="L"
+                      selected={stepData[1].jenisKelamin === "L"}
+                    >
+                      Laki-laki
+                    </option>
+                    <option
+                      value="P"
+                      selected={stepData[1].jenisKelamin === "P"}
+                    >
+                      Perempuan
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Golongan Darah
+                  </label>
+                  <select
+                    name="golongan_darah"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {["A", "B", "O", "AB"].map((g) => (
+                      <option
+                        value={g}
+                        selected={stepData[1].golonganDarah === g}
+                      >
+                        {g}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Agama <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="agama"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {[
+                      "Islam",
+                      "Kristen",
+                      "Katolik",
+                      "Hindu",
+                      "Buddha",
+                      "Konghucu",
+                    ].map((a) => (
+                      <option value={a} selected={stepData[1].agama === a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    No Whatsapp<span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    name="no_hp"
+                    value={stepData[1].noHp || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Email <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={
+                      stepData[1].email &&
+                      stepData[1].email.indexOf("@blank.local") === -1 &&
+                      stepData[1].email.indexOf("@beasiswa.iainptk.ac.id") ===
+                        -1
+                        ? stepData[1].email
+                        : ""
+                    }
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Anak ke-
+                  </label>
+                  <input
+                    type="number"
+                    name="anak_ke"
+                    value={stepData[1].anakKe || ""}
+                    min="1"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jumlah Saudara
+                  </label>
+                  <input
+                    type="number"
+                    name="jumlah_saudara"
+                    value={stepData[1].jumlahSaudara || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Alamat
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Provinsi <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="provinsi"
+                    value={stepData[1].provinsi || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kabupaten / Kota
+                  </label>
+                  <input
+                    type="text"
+                    name="kabupaten"
+                    value={stepData[1].kabupaten || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kecamatan
+                  </label>
+                  <input
+                    type="text"
+                    name="kecamatan"
+                    value={stepData[1].kecamatan || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kelurahan / Desa
+                  </label>
+                  <input
+                    type="text"
+                    name="kelurahan"
+                    value={stepData[1].kelurahan || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Alamat (Jln, Gg, No Rumah)
+                  </label>
+                  <textarea
+                    name="alamat"
+                    rows="2"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >{stepData[1].alamat || ""}</textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    RT / RW
+                  </label>
+                  <input
+                    type="text"
+                    name="rt_rw"
+                    value={stepData[1].rtRw || ""}
+                    placeholder="001/002"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kode Pos
+                  </label>
+                  <input
+                    type="text"
+                    name="kode_pos"
+                    value={stepData[1].kodePos || ""}
+                    maxlength="5"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                No. KIP (Waktu SMA/Sederajat) / PKH / KJP / Desil
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nomor KIP / PIP / KJP (Waktu SMA/Sederajat)
+                  </label>
+                  <input
+                    type="text"
+                    name="no_kip"
+                    value={stepData[1].noKip || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nomor Desil
+                  </label>
+                  <input
+                    type="text"
+                    name="no_desil"
+                    value={stepData[1].noDesil || ""}
+                    placeholder="1-10"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Penerima PKH
+                  </label>
+                  <select
+                    name="penerima_pkh"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="0" selected={!stepData[1].penerimaPkh}>
+                      Tidak
+                    </option>
+                    <option value="1" selected={stepData[1].penerimaPkh === 1}>
+                      Ya
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Penerima KJP
+                  </label>
+                  <select
+                    name="penerima_kjp"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="0" selected={!stepData[1].penerimaKjp}>
+                      Tidak
+                    </option>
+                    <option value="1" selected={stepData[1].penerimaKjp === 1}>
+                      Ya
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Dokumen Pendukung
+              </h3>
+              <p class="text-xs text-outline mb-2">⚠️ Jika No. KIP diisi, unggah Kartu KIP/PIP/KJP menjadi wajib. KKS, SKTM, atau SK Penghasilan Ortu — minimal salah satu wajib diunggah. Admin akan memverifikasi kelengkapan berkas Anda.</p>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <FileUploadBox
+                  id="foto_formal"
+                  label="Pas Foto 3x4 Berwarna"
+                  bagian="identitas_pribadi"
+                  fieldName="foto_formal"
+                  accept=".jpg,.jpeg,.png"
+                  isRequired={true}
+                  hint="Format JPG, maks 2MB"
+                  icon="account_box"
+                  currentFileId={uploadedFiles.foto_formal?.id || ""}
+                  currentFileName={uploadedFiles.foto_formal?.name || ""}
+                />
+                <FileUploadBox
+                  id="ktp"
+                  label="KTP Asli *"
+                  bagian="identitas_pribadi"
+                  fieldName="ktp"
+                  accept=".jpg,.jpeg,.png"
+                  isRequired={true}
+                  hint="Scan/foto KTP asli"
+                  icon="badge"
+                  currentFileId={uploadedFiles.ktp?.id || ""}
+                  currentFileName={uploadedFiles.ktp?.name || ""}
+                />
+                <FileUploadBox
+                  id="akta_kelahiran"
+                  label="Akta Kelahiran *"
+                  bagian="identitas_pribadi"
+                  fieldName="akta_kelahiran"
+                  accept=".jpg,.jpeg,.png,.pdf"
+                  isRequired={true}
+                  hint="Scan akta kelahiran"
+                  icon="description"
+                  currentFileId={uploadedFiles.akta_kelahiran?.id || ""}
+                  currentFileName={uploadedFiles.akta_kelahiran?.name || ""}
+                />
+                <FileUploadBox
+                  id="kip_pip_kjp"
+                  label="Kartu KIP/PIP/KJP *"
+                  bagian="identitas_pribadi"
+                  fieldName="kip_pip_kjp"
+                  accept=".jpg,.jpeg,.png"
+                  isRequired={false}
+                  hint="Wajib jika No. KIP diisi"
+                  icon="credit_card"
+                  currentFileId={uploadedFiles.kip_pip_kjp?.id || ""}
+                  currentFileName={uploadedFiles.kip_pip_kjp?.name || ""}
+                />
+                <FileUploadBox
+                  id="kks"
+                  label="Kartu KKS *"
+                  bagian="identitas_pribadi"
+                  fieldName="kks"
+                  accept=".jpg,.jpeg,.png"
+                  isRequired={false}
+                  hint="Wajib jika tidak ada KIP"
+                  icon="credit_card"
+                  currentFileId={uploadedFiles.kks?.id || ""}
+                  currentFileName={uploadedFiles.kks?.name || ""}
+                />
+                <FileUploadBox
+                  id="sktm"
+                  label="Surat Keterangan Tidak Mampu (SKTM) Asli *"
+                  bagian="identitas_pribadi"
+                  fieldName="sktm"
+                  accept=".pdf"
+                  isRequired={false}
+                  hint="Wajib jika tidak ada KIP"
+                  icon="description"
+                  currentFileId={uploadedFiles.sktm?.id || ""}
+                  currentFileName={uploadedFiles.sktm?.name || ""}
+                />
+              </div>
+            </div>
+        </section>
+
+
+        {/* Step 2: Riwayat Pendidikan */}
+
+        <section data-step="2" data-step-panel class="hidden">
+            <div class="space-y-6">
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jenis Sekolah <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="jenis_sekolah"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {[
+                      "SMA/SMAN",
+                      "MAN/MA Pesantren",
+                      "MA Non-Pesantren",
+                      "SMK/SMKN",
+                    ].map((v) => (
+                      <option
+                        value={v}
+                        selected={stepData[2].jenisSekolah === v}
+                      >
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    NISN <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nisn"
+                    value={stepData[2].nisn || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    NPSN <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="npsn"
+                    value={stepData[2].npsn || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nama Sekolah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nama_sekolah"
+                    value={stepData[2].namaSekolah || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Alamat Sekolah
+                  </label>
+                  <textarea
+                    name="alamat_sekolah"
+                    rows="2"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >{stepData[2].alamatSekolah || ""}</textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Tahun Lulus <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="lulus_tahun"
+                    value={stepData[2].lulusTahun || ""}
+                    placeholder="Contoh: 2024"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jalur Kelulusan <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="lulus_jalur"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {["SPAN", "UMPTKIN", "MANDIRI"].map((v) => (
+                      <option
+                        value={v}
+                        selected={stepData[2].lulusJalur === v}
+                      >
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jurusan SMA/SMK <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="jurusan"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {["IPA", "IPS", "Agama", "Kejuruan", "Umum"].map((v) => (
+                      <option value={v} selected={stepData[2].jurusan === v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <!-- UKT & Prodi — sementara dinonaktifkan, belum terhubung sistem -->
+              {false && (
+              <div>
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                UKT & Prodi
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kategori UKT <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="kategori_ukt"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {[
+                      "UKT 0",
+                      "UKT I",
+                      "UKT II",
+                      "UKT III",
+                      "UKT IV",
+                      "UKT V",
+                    ].map((v) => (
+                      <option
+                        value={v}
+                        selected={stepData[2].kategoriUkt === v}
+                      >
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nominal UKT (Rp.) <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="nominal_ukt"
+                    value={stepData[2].nominalUkt || ""}
+                    min="0"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+              </div>
+              )}
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nomor Tes
+                  </label>
+                  <input
+                    type="text"
+                    name="nomor_tes"
+                    value={stepData[2].nomorTes || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Fakultas <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="fakultas"
+                    value={stepData[2].fakultas || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Program Studi <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="prodi"
+                    value={stepData[2].prodi || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Dokumen Pendukung
+              </h3>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <FileUploadBox
+                  id="ijazah_skl"
+                  label="Ijazah/SKL Fotokopi yang dilegalisir"
+                  bagian="riwayat_pendidikan"
+                  fieldName="ijazah_skl"
+                  accept=".pdf"
+                  isRequired={true}
+                  hint="Format PDF"
+                  icon="description"
+                  currentFileId={uploadedFiles.ijazah_skl?.id || ""}
+                  currentFileName={uploadedFiles.ijazah_skl?.name || ""}
+                />
+                <FileUploadBox
+                  id="transkrip_nilai"
+                  label="Transkrip Nilai Fotokopi yang dilegalisir"
+                  bagian="riwayat_pendidikan"
+                  fieldName="transkrip_nilai"
+                  accept=".pdf"
+                  isRequired={true}
+                  hint="Format PDF"
+                  icon="description"
+                  currentFileId={uploadedFiles.transkrip_nilai?.id || ""}
+                  currentFileName={uploadedFiles.transkrip_nilai?.name || ""}
+                />
+                <FileUploadBox
+                  id="raport_1_6"
+                  label="Raport SMA Fotokopi yang dilegalisir (Semester 1-6)"
+                  bagian="riwayat_pendidikan"
+                  fieldName="raport_1_6"
+                  accept=".pdf"
+                  isRequired={true}
+                  hint="Format PDF"
+                  icon="description"
+                  currentFileId={uploadedFiles.raport_1_6?.id || ""}
+                  currentFileName={uploadedFiles.raport_1_6?.name || ""}
+                />
+              </div>
+            </div>
+        </section>
+
+
+        {/* Step 3: Prestasi & Tahfidz */}
+
+        <section data-step="3" data-step-panel class="hidden">
+            <div class="space-y-6">
+              <div id="prestasi-list" class="space-y-4">
+                <div class="prestasi-item rounded-lg border border-outline-variant bg-surface-container-lowest">
+                  <div class="prestasi-header text-sm font-semibold font-[Montserrat] text-primary px-4 pt-3 pb-2 border-b border-outline-variant">Prestasi Ke-1</div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-4">
+                  <div>
+                    <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                      Nama Lomba / Prestasi
+                    </label>
+                    <input
+                      type="text"
+                      name="nama_lomba"
+                      value={stepData[3].namaLomba || ""}
+                      class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                      Jenis Lomba
+                    </label>
+                    <select
+                      name="jenis_lomba"
+                      class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                    >
+                      <option value="">Pilih</option>
+                      {["Individu", "Regu"].map((v) => (
+                        <option
+                          value={v}
+                          selected={stepData[3].jenisLomba === v}
+                        >
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                      Tingkat Lomba
+                    </label>
+                    <select
+                      name="tingkat_lomba"
+                      class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                    >
+                      <option value="">Pilih</option>
+                      {[
+                        "Kecamatan",
+                        "Kabupaten",
+                        "Provinsi",
+                        "Nasional",
+                        "Internasional",
+                        "Kelas",
+                        "Sekolah",
+                      ].map((v) => (
+                        <option
+                          value={v}
+                          selected={stepData[3].tingkatLomba === v}
+                        >
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                      Predikat / Juara
+                    </label>
+                    <select
+                      name="predikat_juara"
+                      class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                    >
+                      <option value="">Pilih</option>
+                      {[
+                        "Juara I",
+                        "Juara II",
+                        "Juara III",
+                        "Juara IV",
+                        "Harapan I",
+                        "Harapan II",
+                        "Harapan III",
+                      ].map((v) => (
+                        <option
+                          value={v}
+                          selected={stepData[3].predikatJuara === v}
+                        >
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                </div>
+              </div>
+
+              <button type="button" id="btn-tambah-prestasi" class="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold tracking-wider text-primary border-2 border-dashed border-primary rounded-lg hover:bg-primary/5 transition">
+                <span class="material-symbols-outlined text-lg">add</span>
+                Tambah Prestasi
+              </button>
+
+              <p class="text-xs text-outline">Semua prestasi akan disimpan dan digabung. Admin akan meninjau kelengkapan data Anda.</p>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Tahfidz Al-Qur'an
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jumlah Juzz (0 = tidak tahfidz)
+                  </label>
+                  <select
+                    name="jumlah_juzz"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    {[0, 5, 10, 15, 20, 25, 30].map((v) => (
+                      <option
+                        value={v}
+                        selected={stepData[3].jumlahJuzz === v}
+                      >
+                        {v === 0 ? "Tidak Tahfidz" : `${v} Juzz`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Dokumen Pendukung
+              </h3>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <FileUploadBox
+                  id="sertifikat_prestasi"
+                  label="Sertifikat Prestasi"
+                  bagian="prestasi_tahfidz"
+                  fieldName="sertifikat_prestasi"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  hint="Gabung semua sertifikat dalam 1 file"
+                  icon="emoji_events"
+                  currentFileId={uploadedFiles.sertifikat_prestasi?.id || ""}
+                  currentFileName={
+                    uploadedFiles.sertifikat_prestasi?.name || ""
+                  }
+                />
+                <FileUploadBox
+                  id="sertifikat_tahfidz"
+                  label="Sertifikat Tahfidz"
+                  bagian="prestasi_tahfidz"
+                  fieldName="sertifikat_tahfidz"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  hint="PDF/JPG"
+                  icon="menu_book"
+                  currentFileId={uploadedFiles.sertifikat_tahfidz?.id || ""}
+                  currentFileName={uploadedFiles.sertifikat_tahfidz?.name || ""}
+                />
+              </div>
+            </div>
+        </section>
+
+
+        {/* Step 4: Identitas Keluarga */}
+
+        <section data-step="4" data-step-panel class="hidden">
+            <div class="space-y-6">
+              <h3 class="text-lg font-semibold text-on-surface">Data Ayah</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nama Ayah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nama_ayah"
+                    value={stepData[4].namaAyah || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    NIK Ayah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nik_ayah"
+                    value={stepData[4].nikAyah || ""}
+                    placeholder="0 jika meninggal"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Status Ayah <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="status_ayah"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {["Hidup", "Meninggal"].map((v) => (
+                      <option
+                        value={v}
+                        selected={stepData[4].statusAyah === v}
+                      >
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    No. Telp Ayah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="no_telp_ayah"
+                    value={stepData[4].noTelpAyah || ""}
+                    placeholder="0 jika meninggal"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Pendidikan Ayah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="pendidikan_ayah"
+                    value={stepData[4].pendidikanAyah || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Pekerjaan Ayah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="pekerjaan_ayah"
+                    value={stepData[4].pekerjaanAyah || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Penghasilan Ayah (Rp.) <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="penghasilan_ayah"
+                    value={stepData[4].penghasilanAyah || ""}
+                    min="0"
+                    placeholder="0 jika meninggal"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Data Ibu
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nama Ibu <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nama_ibu"
+                    value={stepData[4].namaIbu || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    NIK Ibu <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nik_ibu"
+                    value={stepData[4].nikIbu || ""}
+                    placeholder="0 jika meninggal"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Status Ibu <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="status_ibu"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {["Hidup", "Meninggal"].map((v) => (
+                      <option value={v} selected={stepData[4].statusIbu === v}>
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    No. Telp Ibu <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="no_telp_ibu"
+                    value={stepData[4].noTelpIbu || ""}
+                    placeholder="0 jika meninggal"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Pendidikan Ibu <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="pendidikan_ibu"
+                    value={stepData[4].pendidikanIbu || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Pekerjaan Ibu <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="pekerjaan_ibu"
+                    value={stepData[4].pekerjaanIbu || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Penghasilan Ibu (Rp.) <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="penghasilan_ibu"
+                    value={stepData[4].penghasilanIbu || ""}
+                    min="0"
+                    placeholder="0 jika meninggal"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                KK & Keuangan
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nomor KK <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="nomor_kk"
+                    value={stepData[4].nomorKk || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jumlah Tanggungan <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    name="jumlah_tanggungan"
+                    value={stepData[4].jumlahTanggungan || ""}
+                    min="0"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jumlah Hutang (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="jumlah_hutang"
+                    value={stepData[4].jumlahHutang || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Cicilan Hutang / Bulan (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="cicilan_hutang"
+                    value={stepData[4].cicilanHutang || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jumlah Piutang (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="jumlah_piutang"
+                    value={stepData[4].jumlahPiutang || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Cicilan Piutang / Bulan (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="cicilan_piutang"
+                    value={stepData[4].cicilanPiutang || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Dokumen Pendukung
+              </h3>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <FileUploadBox
+                  id="kartu_keluarga"
+                  label="Kartu Keluarga (KK) Asli"
+                  bagian="identitas_keluarga"
+                  fieldName="kartu_keluarga"
+                  accept=".pdf"
+                  isRequired={true}
+                  hint="Format PDF"
+                  icon="description"
+                  currentFileId={uploadedFiles.kartu_keluarga?.id || ""}
+                  currentFileName={uploadedFiles.kartu_keluarga?.name || ""}
+                />
+                <FileUploadBox
+                  id="akta_kematian"
+                  label="Surat Keterangan Akta Kematian Ortu"
+                  bagian="identitas_keluarga"
+                  fieldName="akta_kematian"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  isRequired={false}
+                  hint="Opsional — jika orang tua meninggal"
+                  icon="description"
+                  currentFileId={uploadedFiles.akta_kematian?.id || ""}
+                  currentFileName={uploadedFiles.akta_kematian?.name || ""}
+                />
+                <FileUploadBox
+                  id="surat_phk_bencana"
+                  label="Surat Keterangan Terdampak PHK/Bencana"
+                  bagian="identitas_keluarga"
+                  fieldName="surat_phk_bencana"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  isRequired={false}
+                  hint="Opsional — jika ortu terdampak PHK/bencana"
+                  icon="description"
+                  currentFileId={uploadedFiles.surat_phk_bencana?.id || ""}
+                  currentFileName={uploadedFiles.surat_phk_bencana?.name || ""}
+                />
+                <FileUploadBox
+                  id="sk_penghasilan_ortu"
+                  label="SK Pekerjaan & Penghasilan Ortu *"
+                  bagian="identitas_keluarga"
+                  fieldName="sk_penghasilan_ortu"
+                  accept=".pdf"
+                  isRequired={false}
+                  hint="Wajib jika tidak ada KIP"
+                  icon="description"
+                  currentFileId={uploadedFiles.sk_penghasilan_ortu?.id || ""}
+                  currentFileName={uploadedFiles.sk_penghasilan_ortu?.name || ""}
+                />
+              </div>
+
+              <div class="flex items-center gap-3 p-3 bg-primary-container/20 rounded-lg border border-outline-variant">
+                <span class="material-symbols-outlined text-primary">download</span>
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-on-surface">Format Surat Pernyataan Penghasilan Ortu</p>
+                  <p class="text-xs text-outline">Unduh template, isi, lalu unggah pada kolom SK Pekerjaan & Penghasilan Ortu di atas.</p>
+                </div>
+                <a
+                  href="https://docs.google.com/document/d/1M6_2YctBcgkN0Pj3ztcEhqxJbwQHxo3i/edit?usp=drive_link&ouid=114148547409101822448&rtpof=true&sd=true"
+                  target="_blank"
+                  rel="noopener"
+                  class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 transition shrink-0"
+                >
+                  <span class="material-symbols-outlined text-lg">download</span>
+                  Unduh Template
+                </a>
+              </div>
+            </div>
+        </section>
+
+
+        {/* Step 5: Kondisi Rumah */}
+
+        <section data-step="5" data-step-panel class="hidden">
+            <div class="space-y-6">
+              <h3 class="text-lg font-semibold text-on-surface">
+                Rumah & Tanah
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Luas Tanah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="luas_tanah"
+                    value={stepData[5].luasTanah || ""}
+                    placeholder="Contoh: 10x15 atau 150 M²"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kepemilikan Rumah <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="kepemilikan_rumah"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {[
+                      "Milik Sendiri",
+                      "Menumpang (Tanpa Sewa)",
+                      "Sewa",
+                      "Kontrak",
+                    ].map((v) => (
+                      <option
+                        value={v}
+                        selected={stepData[5].kepemilikanRumah === v}
+                      >
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div
+                  id="biaya-sewa-wrap"
+                  style={
+                    stepData[5].kepemilikanRumah === "Sewa" ||
+                    stepData[5].kepemilikanRumah === "Kontrak"
+                      ? ""
+                      : "display:none"
+                  }
+                >
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Biaya Sewa / Kontrak (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="biaya_sewa"
+                    value={stepData[5].biayaSewa || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Tanah Lain (milik keluarga)
+                  </label>
+                  <input
+                    type="text"
+                    name="tanah_lain"
+                    value={stepData[5].tanahLain || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Status Tanah Lain
+                  </label>
+                  <input
+                    type="text"
+                    name="status_tanah_lain"
+                    value={stepData[5].statusTanahLain || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Listrik
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Daya Listrik <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="daya_listrik"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {[
+                      "450 VA",
+                      "900 VA",
+                      "1.300 VA",
+                      "2.200 VA",
+                      ">3.500 VA",
+                    ].map((v) => (
+                      <option
+                        value={v}
+                        selected={stepData[5].dayaListrik === v}
+                      >
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Status Listrik <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="status_listrik"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">Pilih</option>
+                    {["Pra Bayar", "Pasca Bayar"].map((v) => (
+                      <option
+                        value={v}
+                        selected={stepData[5].statusListrik === v}
+                      >
+                        {v}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Biaya Listrik Bulan 1 (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="biaya_listrik_1"
+                    value={stepData[5].biayaListrik1 || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Biaya Listrik Bulan 2 (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="biaya_listrik_2"
+                    value={stepData[5].biayaListrik2 || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Biaya Listrik Bulan 3 (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="biaya_listrik_3"
+                    value={stepData[5].biayaListrik3 || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Dokumen Pendukung
+              </h3>
+              <p class="text-xs text-outline mb-2">⚠️ Bukti Bayar Listrik Bulan 1 wajib diunggah. Bulan 2 dan 3 opsional. Jika mengunggah SK Listrik Desa, Bukti Bayar Listrik Bulan 1 menjadi opsional.</p>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <FileUploadBox
+                  id="foto_rumah_depan"
+                  label="Foto Rumah Tampak Depan"
+                  bagian="kondisi_rumah"
+                  fieldName="foto_rumah_depan"
+                  accept=".jpg,.jpeg,.png"
+                  isRequired={true}
+                  hint="Format JPG, maks 2MB"
+                  icon="home"
+                  currentFileId={uploadedFiles.foto_rumah_depan?.id || ""}
+                  currentFileName={uploadedFiles.foto_rumah_depan?.name || ""}
+                />
+                <FileUploadBox
+                  id="foto_ruang_tamu"
+                  label="Foto Ruang Tamu"
+                  bagian="kondisi_rumah"
+                  fieldName="foto_ruang_tamu"
+                  accept=".jpg,.jpeg,.png"
+                  hint="Format JPG"
+                  icon="weekend"
+                  currentFileId={uploadedFiles.foto_ruang_tamu?.id || ""}
+                  currentFileName={uploadedFiles.foto_ruang_tamu?.name || ""}
+                />
+                <FileUploadBox
+                  id="foto_dapur"
+                  label="Foto Dapur"
+                  bagian="kondisi_rumah"
+                  fieldName="foto_dapur"
+                  accept=".jpg,.jpeg,.png"
+                  hint="Format JPG"
+                  icon="kitchen"
+                  currentFileId={uploadedFiles.foto_dapur?.id || ""}
+                  currentFileName={uploadedFiles.foto_dapur?.name || ""}
+                />
+                <FileUploadBox
+                  id="foto_meteran"
+                  label="Foto Meteran Listrik"
+                  bagian="kondisi_rumah"
+                  fieldName="foto_meteran"
+                  accept=".jpg,.jpeg,.png"
+                  hint="Format JPG"
+                  icon="electric_meter"
+                  currentFileId={uploadedFiles.foto_meteran?.id || ""}
+                  currentFileName={uploadedFiles.foto_meteran?.name || ""}
+                />
+                <FileUploadBox
+                  id="bukti_bayar_listrik_1"
+                  label="Bukti Bayar Listrik 1 Bulan Terakhir *"
+                  bagian="kondisi_rumah"
+                  fieldName="bukti_bayar_listrik_1"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  hint="Wajib, kecuali jika unggah SK Listrik Desa"
+                  icon="receipt"
+                  currentFileId={uploadedFiles.bukti_bayar_listrik_1?.id || ""}
+                  currentFileName={
+                    uploadedFiles.bukti_bayar_listrik_1?.name || ""
+                  }
+                />
+                <FileUploadBox
+                  id="surat_listrik_desa"
+                  label="Surat Keterangan Listrik Desa"
+                  bagian="kondisi_rumah"
+                  fieldName="surat_listrik_desa"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  hint="PDF/JPG"
+                  icon="description"
+                  currentFileId={uploadedFiles.surat_listrik_desa?.id || ""}
+                  currentFileName={uploadedFiles.surat_listrik_desa?.name || ""}
+                />
+                <FileUploadBox
+                  id="surat_panti_asuhan"
+                  label="Surat Keterangan Anak Yatim Tinggal di Panti Asuhan"
+                  bagian="kondisi_rumah"
+                  fieldName="surat_panti_asuhan"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  isRequired={false}
+                  hint="Opsional — jika tinggal di panti asuhan"
+                  icon="description"
+                  currentFileId={uploadedFiles.surat_panti_asuhan?.id || ""}
+                  currentFileName={uploadedFiles.surat_panti_asuhan?.name || ""}
+                />
+              </div>
+            </div>
+        </section>
+
+
+        {/* Step 6: Domisili Ortu/Wali */}
+
+        <section data-step="6" data-step-panel class="hidden">
+            <div class="space-y-6">
+              <h3 class="text-lg font-semibold text-on-surface">Alamat Ayah</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Provinsi Ayah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="provinsi_ayah"
+                    value={stepData[6].provinsiAyah || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kabupaten / Kota Ayah <span class="text-error">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="kabupaten_ayah"
+                    value={stepData[6].kabupatenAyah || ""}
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kecamatan Ayah
+                  </label>
+                  <input
+                    type="text"
+                    name="kecamatan_ayah"
+                    value={stepData[6].kecamatanAyah || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kelurahan / Desa Ayah
+                  </label>
+                  <input
+                    type="text"
+                    name="kelurahan_ayah"
+                    value={stepData[6].kelurahanAyah || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Alamat Ayah (Jln, Gg, No Rumah){" "}
+                    <span class="text-error">*</span>
+                  </label>
+                  <textarea
+                    name="alamat_ayah"
+                    rows="2"
+                   
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >{stepData[6].alamatAyah || ""}</textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    RT / RW Ayah
+                  </label>
+                  <input
+                    type="text"
+                    name="rt_rw_ayah"
+                    value={stepData[6].rtRwAyah || ""}
+                    placeholder="001/002"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kode Pos Ayah
+                  </label>
+                  <input
+                    type="text"
+                    name="kode_pos_ayah"
+                    value={stepData[6].kodePosAyah || ""}
+                    maxlength="5"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Link Google Maps Ayah
+                  </label>
+                  <input
+                    type="url"
+                    name="gmap_ayah"
+                    value={stepData[6].gmapAyah || ""}
+                    placeholder="https://maps.google.com/..."
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Alamat Ibu{" "}
+                <span class="text-sm font-normal text-outline">
+                  (diisi jika berbeda dengan Ayah)
+                </span>
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Provinsi Ibu
+                  </label>
+                  <input
+                    type="text"
+                    name="provinsi_ibu"
+                    value={stepData[6].provinsiIbu || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kabupaten / Kota Ibu
+                  </label>
+                  <input
+                    type="text"
+                    name="kabupaten_ibu"
+                    value={stepData[6].kabupatenIbu || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kecamatan Ibu
+                  </label>
+                  <input
+                    type="text"
+                    name="kecamatan_ibu"
+                    value={stepData[6].kecamatanIbu || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kelurahan / Desa Ibu
+                  </label>
+                  <input
+                    type="text"
+                    name="kelurahan_ibu"
+                    value={stepData[6].kelurahanIbu || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Alamat Ibu (Jln, Gg, No Rumah)
+                  </label>
+                  <textarea
+                    name="alamat_ibu"
+                    rows="2"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >{stepData[6].alamatIbu || ""}</textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    RT / RW Ibu
+                  </label>
+                  <input
+                    type="text"
+                    name="rt_rw_ibu"
+                    value={stepData[6].rtRwIbu || ""}
+                    placeholder="001/002"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kode Pos Ibu
+                  </label>
+                  <input
+                    type="text"
+                    name="kode_pos_ibu"
+                    value={stepData[6].kodePosIbu || ""}
+                    maxlength="5"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Link Google Maps Ibu
+                  </label>
+                  <input
+                    type="url"
+                    name="gmap_ibu"
+                    value={stepData[6].gmapIbu || ""}
+                    placeholder="https://maps.google.com/..."
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Data Wali{" "}
+                <span class="text-sm font-normal text-outline">
+                  (diisi jika kedua orang tua sudah tidak ada)
+                </span>
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Hubungan dengan Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="hubungan_wali"
+                    value={stepData[6].hubunganWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Nama Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="nama_wali"
+                    value={stepData[6].namaWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    NIK Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="nik_wali"
+                    value={stepData[6].nikWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    No. Telp Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="no_telp_wali"
+                    value={stepData[6].noTelpWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Pendidikan Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="pendidikan_wali"
+                    value={stepData[6].pendidikanWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Pekerjaan Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="pekerjaan_wali"
+                    value={stepData[6].pekerjaanWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Penghasilan Wali (Rp.)
+                  </label>
+                  <input
+                    type="number"
+                    name="penghasilan_wali"
+                    value={stepData[6].penghasilanWali || ""}
+                    min="0"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Alamat Wali
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Provinsi Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="provinsi_wali"
+                    value={stepData[6].provinsiWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kabupaten / Kota Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="kabupaten_wali"
+                    value={stepData[6].kabupatenWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kecamatan Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="kecamatan_wali"
+                    value={stepData[6].kecamatanWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kelurahan / Desa Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="kelurahan_wali"
+                    value={stepData[6].kelurahanWali || ""}
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Alamat Wali (Jln, Gg, No Rumah)
+                  </label>
+                  <textarea
+                    name="alamat_wali"
+                    rows="2"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >{stepData[6].alamatWali || ""}</textarea>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    RT / RW Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="rt_rw_wali"
+                    value={stepData[6].rtRwWali || ""}
+                    placeholder="001/002"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Kode Pos Wali
+                  </label>
+                  <input
+                    type="text"
+                    name="kode_pos_wali"
+                    value={stepData[6].kodePosWali || ""}
+                    maxlength="5"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+                <div class="md:col-span-2">
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Link Google Maps Wali
+                  </label>
+                  <input
+                    type="url"
+                    name="gmap_wali"
+                    value={stepData[6].gmapWali || ""}
+                    placeholder="https://maps.google.com/..."
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Dokumen Pendukung
+              </h3>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <FileUploadBox
+                  id="sk_penghasilan_wali"
+                  label="SK Pekerjaan & Penghasilan Wali"
+                  bagian="domisili_ortu"
+                  fieldName="sk_penghasilan_wali"
+                  accept=".pdf"
+                  hint="Format PDF, jika ada wali"
+                  icon="description"
+                  currentFileId={uploadedFiles.sk_penghasilan_wali?.id || ""}
+                  currentFileName={
+                    uploadedFiles.sk_penghasilan_wali?.name || ""
+                  }
+                />
+              </div>
+            </div>
+        </section>
+
+
+        {/* Step 7: Kebutuhan Khusus */}
+
+        <section data-step="7" data-step-panel class="hidden">
+            <div class="space-y-6">
+              <p class="text-sm text-outline">
+                Isi bagian ini jika Anda memiliki kebutuhan khusus atau merupakan
+                penyandang disabilitas.
+              </p>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Penyandang Disabilitas <span class="text-error">*</span>
+                  </label>
+                  <select
+                    name="penyandang_disabilitas"
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option
+                      value="0"
+                      selected={stepData[7].penyandangDisabilitas === undefined || stepData[7].penyandangDisabilitas === 0}
+                    >
+                      Tidak
+                    </option>
+                    <option
+                      value="1"
+                      selected={stepData[7].penyandangDisabilitas === 1}
+                    >
+                      Ya
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
+                    Jenis Disabilitas / Kebutuhan Khusus
+                  </label>
+                  <input
+                    type="text"
+                    name="jenis_disabilitas"
+                    value={stepData[7].jenisDisabilitas || ""}
+                    placeholder="Contoh: tunanetra, tunarungu, tunadaksa, dll."
+                    class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none"
+                  />
+                </div>
+              </div>
+
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                Dokumen Pendukung
+              </h3>
+              <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <FileUploadBox
+                  id="surat_disabilitas"
+                  label="Surat Keterangan Disabilitas"
+                  bagian="kebutuhan_khusus"
+                  fieldName="surat_disabilitas"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  isRequired={false}
+                  hint="Opsional — jika penyandang disabilitas"
+                  icon="description"
+                  currentFileId={uploadedFiles.surat_disabilitas?.id || ""}
+                  currentFileName={uploadedFiles.surat_disabilitas?.name || ""}
+                />
+              </div>
+            </div>
+        </section>
+
+      </div>
+
+      <!-- Navigation Buttons -->
+      <div class="flex justify-between pt-6 border-t border-outline-variant">
+        <button
+          type="button"
+          id="btn-back"
+          class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-on-surface-variant bg-surface-container-lowest border border-outline-variant border-outline-variant rounded-lg hover:bg-surface hover:bg-surface-container-high transition"
+        >
+          <span class="material-symbols-outlined text-lg">arrow_back</span>
+          Kembali
+        </button>
+
+        <div class="flex gap-3">
+          <button
+            type="button"
+            id="btn-save"
+            class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-primary bg-primary-container/20 rounded-lg hover:bg-primary-container hover:bg-primary-container/20 transition"
+          >
+            <span class="material-symbols-outlined text-lg">save</span>
+            Simpan
+          </button>
+          <button
+            type="button"
+            id="btn-next"
+            class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary transition"
+          >
+            Simpan & Lanjut
+            <span class="material-symbols-outlined text-lg">
+              arrow_forward
+            </span>
+          </button>
+          <button
+            type="button"
+            id="btn-review"
+            class="hidden inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary transition"
+          >
+            <span class="material-symbols-outlined text-lg">preview</span>
+            Review
+          </button>
+        </div>
+      </div>
+    </form>
+  </Card>
+
+  <!-- Status Message -->
+  <div id="save-status" class="hidden fixed bottom-4 right-4 z-50"></div>
+
+  <script define:vars={{ step }} is:inline>
+    const form = document.getElementById("form-wizard");
+    const statusEl = document.getElementById("save-status");
+    const STEP_VALUE = { step };
+    // SPA state — mulai dari step yang di-render server (default 1)
+    let currentStep = STEP_VALUE.step || 1;
+    const MAX_STEP = 7;
+
+    function showStatus(msg, type) {
+      statusEl.innerHTML = `
+        <div class="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+          type === "success" ? "bg-primary text-white" : "bg-error text-white"
+        }">
+          <span class="material-symbols-outlined text-lg">${type === "success" ? "check_circle" : "error"}</span>
+          ${msg}
+        </div>
+      `;
+      statusEl.classList.remove("hidden");
+      setTimeout(() => statusEl.classList.add("hidden"), 3000);
+    }
+
+    function showStep(n) {
+      if (n < 1 || n > MAX_STEP) return;
+      currentStep = n;
+      document.querySelectorAll("[data-step-panel]").forEach((panel) => {
+        const stepNum = parseInt(panel.getAttribute("data-step"));
+        panel.classList.toggle("hidden", stepNum !== n);
+      });
+      // Update stepper active state (swap Tailwind classes)
+      document.querySelectorAll("[data-step-link]").forEach((link) => {
+        const stepNum = parseInt(link.getAttribute("data-step-link"));
+        const dot = link.querySelector(".stepper-dot");
+        const isActive = stepNum === n;
+        const isCompleted = link.classList.contains("completed");
+        // Link text color
+        link.classList.toggle("text-primary", isActive || isCompleted);
+        link.classList.toggle("text-outline-variant", !isActive && !isCompleted);
+        // Dot visual
+        if (dot) {
+          dot.classList.toggle("border-blue-600", isActive);
+          dot.classList.toggle("border-green-600", !isActive && isCompleted);
+          dot.classList.toggle("bg-primary", isActive || isCompleted);
+          dot.classList.toggle("text-white", isActive || isCompleted);
+          dot.classList.toggle("text-outline-variant", !isActive && !isCompleted);
+          dot.textContent = isCompleted && !isActive ? "✓" : "" + stepNum;
+        }
+      });
+      // Update "Simpan & Lanjut" vs "Review"
+      const btnNext = document.getElementById("btn-next");
+      const btnReview = document.getElementById("btn-review");
+      if (btnNext) btnNext.classList.toggle("hidden", n >= MAX_STEP);
+      if (btnReview) btnReview.classList.toggle("hidden", n < MAX_STEP);
+      // Update card title (the h3 inside the Card wrapping #form-wizard)
+      const formCard = form.closest('.rounded-xl');
+      const titleEl = formCard ? formCard.querySelector('h3') : null;
+      if (titleEl) {
+        const labels = {
+          1: "Identitas Pribadi", 2: "Riwayat Pendidikan", 3: "Prestasi & Tahfidz",
+          4: "Identitas Keluarga", 5: "Kondisi Rumah", 6: "Domisili Ortu/Wali", 7: "Kebutuhan Khusus",
+        };
+        titleEl.textContent = `Bagian ${n}: ${labels[n] || ""}`;
+      }
+      // Update URL hash without reload (history) — supaya back/refresh tetap di step ini
+      if (history && history.replaceState) {
+        const url = new URL(window.location.href);
+        url.searchParams.set("step", String(n));
+        history.replaceState(null, "", url.pathname + url.search);
+      }
+    }
+
+    function getFormData() {
+      // Collect HANYA fields dari step aktive (data-step-panel yang terlihat)
+      const active = document.querySelector(`[data-step-panel][data-step="${currentStep}"]`);
+      const data = {};
+      if (active) {
+        const fields = active.querySelectorAll("input, select, textarea");
+        fields.forEach((el) => {
+          if (!el.name) return;
+          const camelKey = el.name.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+          data[camelKey] = el.type === "checkbox" ? (el.checked ? 1 : 0) : (el.value || null);
+        });
+      }
+      return data;
+    }
+
+    // Conditional document requirements — handled via static hint text above.
+    // KIP diisi → upload KIP wajib. KKS/PKH/SKTM/SK Penghasilan: minimal satu wajib.
+    // Admin akan memverifikasi kelengkapan. User cukup diinformasikan.
+
+    // Tombol tambah prestasi (step 3)
+    var btnTambah = document.getElementById('btn-tambah-prestasi');
+    if (btnTambah) {
+      function renumberPrestasi() {
+        var items = document.querySelectorAll('#prestasi-list .prestasi-item');
+        items.forEach(function(item, i) {
+          var header = item.querySelector('.prestasi-header');
+          if (header) {
+            var delBtn = header.querySelector('button');
+            header.textContent = 'Prestasi Ke-' + (i + 1);
+            if (delBtn) header.appendChild(delBtn);
+          }
+        });
+      }
+
+      btnTambah.addEventListener('click', function() {
+        var list = document.getElementById('prestasi-list');
+        var template = list.querySelector('.prestasi-item');
+        var clone = template.cloneNode(true);
+        var inputs = clone.querySelectorAll('input, select');
+        inputs.forEach(function(el) { el.value = ''; });
+        var header = clone.querySelector('.prestasi-header');
+        var delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'text-error hover:bg-error-container p-1 rounded ml-auto';
+        delBtn.innerHTML = '<span class=\\"material-symbols-outlined text-sm\\">delete</span>';
+        delBtn.onclick = function() { clone.remove(); renumberPrestasi(); };
+        if (header) { header.style.display = 'flex'; header.style.alignItems = 'center'; header.appendChild(delBtn); }
+        list.appendChild(clone);
+        renumberPrestasi();
+      });
+
+      var firstHeader = document.querySelector('#prestasi-list .prestasi-header');
+      if (firstHeader && !firstHeader.querySelector('button')) {
+        firstHeader.style.display = 'flex';
+        firstHeader.style.alignItems = 'center';
+        var firstDel = document.createElement('button');
+        firstDel.type = 'button';
+        firstDel.className = 'text-outline-variant hover:bg-error-container p-1 rounded ml-auto';
+        firstDel.innerHTML = '<span class=\\\"material-symbols-outlined text-sm\\\">delete</span>';
+        firstDel.onclick = function() {
+          var item = firstHeader.closest('.prestasi-item');
+          if (document.querySelectorAll('#prestasi-list .prestasi-item').length > 1) {
+            item.remove();
+            renumberPrestasi();
+          }
+        };
+        firstHeader.appendChild(firstDel);
+      }
+    }
+
+    async function saveForm(targetStep) {
+      // targetStep optional; default currentStep. Simpan step UNTUK setiap step yg punya data terisi.
+      // Kalau currentStep berubah, data di form masih utuh (semua step dirender).
+      const stepToSave = targetStep || currentStep;
+      const data = getFormData();
+      const res = await fetch("/api/pendaftaran/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ step: stepToSave, data }),
+      });
+      return res.json();
+    }
+
+    // Save button
+    document.getElementById("btn-save").addEventListener("click", async () => {
+      const result = await saveForm();
+      if (result.success) {
+        showStatus("Data berhasil disimpan", "success");
+      } else {
+        showStatus(result.error || "Gagal menyimpan", "error");
+      }
+    });
+
+    // Next button
+    const btnNext = document.getElementById("btn-next");
+    if (btnNext) {
+      btnNext.addEventListener("click", async () => {
+        const result = await saveForm();
+        if (result.success) {
+          showStep(currentStep + 1);
+        } else {
+          showStatus(result.error || "Gagal menyimpan", "error");
+        }
+      });
+    }
+
+    // Back button
+    const btnBack = document.getElementById("btn-back");
+    if (btnBack) {
+      btnBack.addEventListener("click", () => showStep(currentStep - 1));
+    }
+
+    // Stepper links (client-side nav)
+    document.querySelectorAll("[data-step-link]").forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        const n = parseInt(link.getAttribute("data-step-link"));
+        showStep(n);
+      });
+    });
+
+    // Review button (step 7)
+    const btnReview = document.getElementById("btn-review");
+    if (btnReview) {
+      btnReview.addEventListener("click", async () => {
+        const result = await saveForm();
+        if (result.success) {
+          window.location.href = "/mahasiswa/form/review";
+        } else {
+          showStatus(result.error || "Gagal menyimpan", "error");
+        }
+      });
+    }
+
+    // Init: show the server-rendered step
+    showStep(currentStep);
+  </script>
+
+</MahasiswaLayout>

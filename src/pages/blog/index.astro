@@ -1,0 +1,206 @@
+---
+// path: src/pages/blog/index.astro
+import PublicLayout from "../../layouts/PublicLayout.astro";
+
+import { drizzle } from "drizzle-orm/d1";
+import { eq, desc, and } from "drizzle-orm";
+import * as schema from "../../db/schema";
+import {
+  blogPosts,
+  users,
+  blogCategories,
+  blogTags,
+  blogPostTags,
+} from "../../db/schema";
+
+// Get URL params
+const url = new URL(Astro.request.url);
+const categoryFilter = url.searchParams.get("kategori") || "";
+
+// Fetch published posts with category and tags
+let posts: any[] = [];
+let categories: any[] = [];
+
+try {
+  if (Astro.locals.runtime.env?.DB) {
+    const db = drizzle(Astro.locals.runtime.env.DB, { schema });
+
+    // Fetch categories
+    categories = await db
+      .select()
+      .from(blogCategories)
+      .orderBy(blogCategories.name);
+
+    // Build query
+    let query = db
+      .select({
+        id: blogPosts.id,
+        title: blogPosts.title,
+        slug: blogPosts.slug,
+        excerpt: blogPosts.excerpt,
+        coverImage: blogPosts.coverImage,
+        publishedAt: blogPosts.publishedAt,
+        categoryId: blogPosts.categoryId,
+        authorName: users.namaLengkap,
+        categoryName: blogCategories.name,
+        categorySlug: blogCategories.slug,
+      })
+      .from(blogPosts)
+      .leftJoin(users, eq(blogPosts.authorId, users.id))
+      .leftJoin(blogCategories, eq(blogPosts.categoryId, blogCategories.id))
+      .where(eq(blogPosts.status, "published"))
+      .orderBy(desc(blogPosts.publishedAt));
+
+    let allPosts = await query;
+
+    // Filter by category on server if provided
+    if (categoryFilter) {
+      allPosts = allPosts.filter((p) => p.categorySlug === categoryFilter);
+    }
+
+    // Attach tags to each post
+    posts = await Promise.all(
+      allPosts.map(async (post) => {
+        let tags: string[] = [];
+        try {
+          const tagRows = await db
+            .select({ name: blogTags.name })
+            .from(blogPostTags)
+            .innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
+            .where(eq(blogPostTags.postId, post.id));
+          tags = tagRows.map((r: any) => r.name);
+        } catch (e) {}
+        return { ...post, tags };
+      }),
+    );
+  }
+} catch (e) {
+  // fallback: empty
+}
+---
+
+<PublicLayout title="Berita & Artikel">
+  <!-- Main Content -->
+  <main class="max-w-[1280px] mx-auto px-gutter py-16">
+    <div class="mb-8">
+      <h1 class="text-[32px] font-semibold font-[Montserrat] text-primary">Berita & Artikel</h1>
+      <p class="text-on-surface-variant mt-2">Informasi terbaru seputar beasiswa IAIN Pontianak</p>
+    </div>
+
+    <!-- Category Filter -->
+    {
+      categories.length > 0 && (
+        <div class="flex flex-wrap gap-2 mb-8">
+          <a
+            href="/blog"
+            class:list={[
+              "px-3 py-1.5 rounded-full text-sm font-semibold tracking-wider transition-colors",
+              !categoryFilter
+                ? "bg-primary text-on-primary"
+                : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest",
+            ]}
+          >
+            Semua
+          </a>
+          {categories.map((cat) => (
+            <a
+              href={`/blog?kategori=${cat.slug}`}
+              class:list={[
+                "px-3 py-1.5 rounded-full text-sm font-semibold tracking-wider transition-colors",
+                categoryFilter === cat.slug
+                  ? "bg-primary text-on-primary"
+                  : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest",
+              ]}
+            >
+              {cat.name}
+            </a>
+          ))}
+        </div>
+      )
+    }
+
+    {
+      posts.length === 0 ? (
+        <div class="text-center py-20 bg-white rounded-xl border border-outline-variant">
+          <span class="material-symbols-outlined text-7xl text-outline-variant mb-4">newspaper</span>
+          <p class="text-lg text-on-surface-variant">Belum ada berita</p>
+          {categoryFilter && (
+            <p class="text-sm text-outline mt-1">untuk kategori yang dipilih</p>
+          )}
+        </div>
+      ) : (
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {posts.map((post) => (
+            <a href={`/blog/${post.slug}`} class="group">
+              <div class="bg-white rounded-xl border border-outline-variant h-full hover:shadow-md transition-shadow overflow-hidden">
+                {/* Cover Image */}
+                {post.coverImage ? (
+                  <div class="aspect-video overflow-hidden">
+                    <img
+                      src={post.coverImage}
+                      alt={post.title}
+                      class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                ) : (
+                  <div class="aspect-video bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-5xl text-primary/20">article</span>
+                  </div>
+                )}
+
+                <div class="p-4">
+                  {/* Category Badge */}
+                  {post.categoryName && (
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold tracking-wider bg-tertiary-container text-on-tertiary-container mb-2">
+                      {post.categoryName}
+                    </span>
+                  )}
+
+                  {/* Content */}
+                  <h2 class="text-lg font-bold font-[Montserrat] text-on-surface group-hover:text-primary transition-colors line-clamp-2">
+                    {post.title}
+                  </h2>
+                  {post.excerpt && (
+                    <p class="text-sm text-on-surface-variant mt-2 line-clamp-2">
+                      {post.excerpt}
+                    </p>
+                  )}
+
+                  {/* Tags */}
+                  {post.tags && post.tags.length > 0 && (
+                    <div class="flex flex-wrap gap-1 mt-3">
+                      {post.tags.map((tag: string) => (
+                        <span class="text-xs px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div class="flex items-center gap-3 mt-4 text-xs text-outline">
+                    {post.authorName && (
+                      <span class="flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">person</span>
+                        {post.authorName}
+                      </span>
+                    )}
+                    {post.publishedAt && (
+                      <span class="flex items-center gap-1">
+                        <span class="material-symbols-outlined text-sm">calendar_today</span>
+                        {new Date(post.publishedAt).toLocaleDateString("id-ID", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </a>
+          ))}
+        </div>
+      )
+    }
+  </main>
+</PublicLayout>

@@ -1,0 +1,244 @@
+---
+// path: src/pages/admin/blog/index.astro
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq, desc } from 'drizzle-orm';
+import * as schema from '../../../db/schema';
+import { blogPosts, blogCategories, admins, blogTags, blogPostTags } from '../../../db/schema';
+import { verifyGardaToken } from "../../../lib/auth";
+
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+// Get search params
+const url = new URL(Astro.request.url);
+const search = url.searchParams.get('q') || '';
+
+// Fetch all blog posts with author and category info
+const allPosts = await db.select({
+  id: blogPosts.id,
+  title: blogPosts.title,
+  slug: blogPosts.slug,
+  excerpt: blogPosts.excerpt,
+  docId: blogPosts.docId,
+  categoryId: blogPosts.categoryId,
+  status: blogPosts.status,
+  publishedAt: blogPosts.publishedAt,
+  createdAt: blogPosts.createdAt,
+  authorName: admins.namaLengkap,
+  categoryName: blogCategories.name,
+}).from(blogPosts)
+  .leftJoin(admins, eq(blogPosts.authorId, admins.id))
+  .leftJoin(blogCategories, eq(blogPosts.categoryId, blogCategories.id))
+  .orderBy(desc(blogPosts.createdAt));
+
+// Attach tags to each post
+const postsWithTags = await Promise.all(
+  allPosts.map(async (post) => {
+    let tags: string[] = [];
+    try {
+      const tagRows = await db.select({ name: blogTags.name })
+        .from(blogPostTags)
+        .innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
+        .where(eq(blogPostTags.postId, post.id));
+      tags = tagRows.map((r: any) => r.name);
+    } catch (e) {}
+    return { ...post, tags };
+  })
+);
+
+let filtered = postsWithTags;
+if (search) {
+  const q = search.toLowerCase();
+  filtered = filtered.filter(p => p.title.toLowerCase().includes(q));
+}
+---
+
+<AdminLayout title="Kelola Blog" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="blog">
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-extrabold text-on-surface">Kelola Blog/Berita</h1>
+      <p class="text-outline mt-1">Kelola artikel dan berita untuk publik</p>
+    </div>
+    <a href="/admin/blog/new" class="inline-flex items-center gap-2 bg-primary hover:bg-primary text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+      <span class="material-symbols-outlined text-lg">add</span>
+      Tambah Post
+    </a>
+  </div>
+
+  <!-- Search -->
+  <Card class="mb-6">
+    <form method="GET" class="flex gap-3">
+      <input type="text" name="q" value={search} placeholder="Cari judul post..."
+        class="flex-1 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none" />
+      <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary text-white text-sm font-medium rounded-lg transition">
+        <span class="material-symbols-outlined text-lg align-middle">search</span>
+      </button>
+    </form>
+  </Card>
+
+  <!-- Posts Table -->
+  <Card>
+    {filtered.length === 0 ? (
+      <div class="text-center py-12">
+        <span class="material-symbols-outlined text-6xl text-outline-variant dark:text-on-surface-variant mb-4">article</span>
+        <p class="text-outline">
+          {search ? 'Tidak ada post ditemukan' : 'Belum ada post blog'}
+        </p>
+      </div>
+    ) : (
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="border-b border-outline-variant">
+              <th class="text-left py-3 px-4 font-semibold text-on-surface-variant">Judul</th>
+              <th class="text-left py-3 px-4 font-semibold text-on-surface-variant">Kategori</th>
+              <th class="text-left py-3 px-4 font-semibold text-on-surface-variant">Tag</th>
+              <th class="text-left py-3 px-4 font-semibold text-on-surface-variant">Status</th>
+              <th class="text-left py-3 px-4 font-semibold text-on-surface-variant">Penulis</th>
+              <th class="text-left py-3 px-4 font-semibold text-on-surface-variant">Tanggal</th>
+              <th class="text-left py-3 px-4 font-semibold text-on-surface-variant">Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((post) => (
+              <tr class="border-b border-slate-100 border-outline-variant hover:bg-surface hover:bg-surface-container-high/50">
+                <td class="py-3 px-4">
+                  <p class="font-medium text-on-surface">{post.title}</p>
+                  {post.excerpt && (
+                    <p class="text-xs text-outline mt-0.5 line-clamp-1">{post.excerpt}</p>
+                  )}
+                </td>
+                <td class="py-3 px-4">
+                  {post.categoryName ? (
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-tertiary-container text-on-tertiary-container">
+                      {post.categoryName}
+                    </span>
+                  ) : (
+                    <span class="text-xs text-outline-variant">-</span>
+                  )}
+                </td>
+                <td class="py-3 px-4">
+                  {post.tags && post.tags.length > 0 ? (
+                    <div class="flex flex-wrap gap-1">
+                      {post.tags.map((tag: string) => (
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-surface-container-high text-on-surface-variant">{tag}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <span class="text-xs text-outline-variant">-</span>
+                  )}
+                </td>
+                <td class="py-3 px-4">
+                  <span class:list={[
+                    'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
+                    post.status === 'published'
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'bg-secondary-container text-on-secondary-container',
+                  ]}>
+                    {post.status === 'published' ? 'Published' : 'Draft'}
+                  </span>
+                </td>
+                <td class="py-3 px-4 text-on-surface-variant text-xs">{post.authorName || '-'}</td>
+                <td class="py-3 px-4 text-outline text-xs">
+                  {post.publishedAt
+                    ? new Date(post.publishedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : new Date(post.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                  }
+                </td>
+                <td class="py-3 px-4">
+                  <div class="flex items-center gap-1.5">
+                    {post.docId && (
+                      <a href={`https://docs.google.com/document/d/${post.docId}/edit`} target="_blank" class="p-1.5 rounded hover:bg-primary-container hover:bg-primary-container/20 text-primary" title="Buka Google Doc">
+                        <span class="material-symbols-outlined text-base">description</span>
+                      </a>
+                    )}
+                    <button
+                      onclick={`toggleStatus(${post.id})`}
+                      class:list={[
+                        'p-1.5 rounded text-sm font-medium transition-colors',
+                        post.status === 'published'
+                          ? 'text-primary hover:bg-primary-container hover:bg-primary-container/20'
+                          : 'text-secondary hover:bg-secondary-container hover:bg-secondary-container/20',
+                      ]}
+                      title={post.status === 'published' ? 'Jadikan Draft' : 'Publish'}
+                    >
+                      <span class="material-symbols-outlined text-base">{post.status === 'published' ? 'toggle_on' : 'toggle_off'}</span>
+                    </button>
+                    {post.status === 'published' && (
+                      <a href={`/blog/${post.slug}`} target="_blank" class="p-1.5 rounded hover:bg-primary-container hover:bg-primary-container/20 text-primary" title="Lihat di web">
+                        <span class="material-symbols-outlined text-base">visibility</span>
+                      </a>
+                    )}
+                    <a href={`/admin/blog/edit/${post.id}`} class="p-1.5 rounded hover:bg-surface-container-high hover:bg-surface-container-high text-outline" title="Edit metadata">
+                      <span class="material-symbols-outlined text-base">settings</span>
+                    </a>
+                    <button
+                      onclick={`deletePost(${post.id}, \`${post.title}\`)`}
+                      class="p-1.5 rounded hover:bg-error-container hover:bg-error-container text-error" title="Hapus"
+                    >
+                      <span class="material-symbols-outlined text-base">delete</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+    <div class="mt-4 text-sm text-outline">
+      Menampilkan {filtered.length} dari {allPosts.length} post
+    </div>
+  </Card>
+
+  <div id="toast" class="hidden fixed bottom-4 right-4 z-50"></div>
+
+  <Fragment set:html={`<script>
+    async function toggleStatus(id) {
+      try {
+        const res = await fetch('/api/admin/blog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'toggle-status', id }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          alert(data.message || 'Gagal mengubah status');
+        }
+      } catch(e) {
+        alert('Terjadi kesalahan: ' + e.message);
+      }
+    }
+
+    async function deletePost(id, title) {
+      if (!confirm('Hapus post "' + title + '"?')) return;
+      try {
+        const res = await fetch('/api/admin/blog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', id }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          alert(data.message || 'Gagal menghapus');
+        }
+      } catch(e) {
+        alert('Terjadi kesalahan: ' + e.message);
+      }
+    }
+  </script>`} />
+</AdminLayout>

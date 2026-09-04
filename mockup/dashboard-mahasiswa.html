@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+
+<html lang="id">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Dashboard Mahasiswa - Beasiswa IAIN Pontianak</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&amp;family=Inter:wght@400;500;600&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "primary": "#004d27",
+                        "on-secondary-fixed-variant": "#574500",
+                        "tertiary-fixed-dim": "#a5d0b9",
+                        "secondary": "#735c00",
+                        "on-secondary": "#ffffff",
+                        "primary-fixed-dim": "#83d99c",
+                        "on-error-container": "#93000a",
+                        "on-secondary-container": "#745c00",
+                        "on-surface": "#191c1d",
+                        "secondary-fixed-dim": "#e9c349",
+                        "on-primary-container": "#8ee4a6",
+                        "tertiary": "#224a39",
+                        "surface-container-highest": "#e1e3e4",
+                        "primary-fixed": "#9ef6b6",
+                        "surface": "#f8f9fa",
+                        "surface-container-low": "#f3f4f5",
+                        "on-tertiary": "#ffffff",
+                        "secondary-fixed": "#ffe088",
+                        "on-error": "#ffffff",
+                        "on-surface-variant": "#3f4940",
+                        "surface-bright": "#f8f9fa",
+                        "primary-container": "#006837",
+                        "on-tertiary-fixed": "#002114",
+                        "error-container": "#ffdad6",
+                        "on-background": "#191c1d",
+                        "surface-container-high": "#e7e8e9",
+                        "outline-variant": "#bec9be",
+                        "surface-container": "#edeeef",
+                        "error": "#ba1a1a",
+                        "on-primary": "#ffffff",
+                        "on-primary-fixed": "#00210e",
+                        "inverse-surface": "#2e3132",
+                        "surface-container-lowest": "#ffffff",
+                        "background": "#f8f9fa",
+                        "on-tertiary-fixed-variant": "#274e3d",
+                        "on-primary-fixed-variant": "#00522a",
+                        "on-tertiary-container": "#b0dcc4",
+                        "on-secondary-fixed": "#241a00",
+                        "inverse-on-surface": "#f0f1f2",
+                        "surface-variant": "#e1e3e4",
+                        "outline": "#6f7a70",
+                        "tertiary-fixed": "#c1ecd4",
+                        "surface-tint": "#0b6d3b",
+                        "secondary-container": "#fed65b",
+                        "tertiary-container": "#3a624f",
+                        "surface-dim": "#d9dadb",
+                        "inverse-primary": "#83d99c"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "stack-md": "16px",
+                        "stack-lg": "32px",
+                        "section-gap": "80px",
+                        "gutter": "24px",
+                        "container-max": "1280px",
+                        "stack-sm": "8px",
+                        "margin-mobile": "16px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Inter"],
+                        "headline-sm": ["Montserrat"],
+                        "display-lg": ["Montserrat"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "headline-md": ["Montserrat"],
+                        "display-lg-mobile": ["Montserrat"]
+                    },
+                    "fontSize": {
+                        "label-md": ["14px", { "lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "headline-sm": ["24px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "headline-md": ["32px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "display-lg-mobile": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }]
+                    }
+                },
+            },
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            display: inline-block;
+            line-height: 1;
+            text-transform: none;
+            letter-spacing: normal;
+            word-wrap: normal;
+            white-space: nowrap;
+            direction: ltr;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            color: #191c1d;
+        }
+
+        .sidebar-active {
+            background-color: #fed65b;
+            /* secondary-container */
+            color: #745c00;
+            /* on-secondary-container */
+            border-radius: 9999px;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid #e9ecef;
+        }
+
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.35s;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex font-body-md text-body-md overflow-x-hidden">
+    <!-- Navigation Drawer (Sidebar) -->
+    <aside
+        class="fixed left-0 top-0 h-full w-72 bg-surface-container-low dark:bg-surface-dim shadow-sm flex flex-col gap-stack-md p-stack-md hidden md:flex z-50">
+        <div class="px-4 py-6">
+            <h1 class="font-headline-sm text-headline-sm text-primary">Beasiswa IAIN</h1>
+            <p class="text-[10px] uppercase tracking-widest text-on-surface-variant opacity-70">Portal Mahasiswa</p>
+        </div>
+        <nav class="flex-grow flex flex-col gap-2">
+            <a class="sidebar-active flex items-center gap-4 px-4 py-3 transition-all duration-150" href="#">
+                <span class="material-symbols-outlined">dashboard</span>
+                <span class="font-label-md text-label-md">Dashboard</span>
+            </a>
+            <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-4 px-4 py-3 rounded-full transition-all duration-150"
+                href="#">
+                <span class="material-symbols-outlined">person</span>
+                <span class="font-label-md text-label-md">Profil</span>
+            </a>
+            <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-4 px-4 py-3 rounded-full transition-all duration-150"
+                href="#">
+                <span class="material-symbols-outlined">folder_open</span>
+                <span class="font-label-md text-label-md">Berkas</span>
+            </a>
+            <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-4 px-4 py-3 rounded-full transition-all duration-150"
+                href="#">
+                <span class="material-symbols-outlined">notifications</span>
+                <span class="font-label-md text-label-md">Pengumuman</span>
+            </a>
+            <div class="mt-auto pt-6 border-t border-outline-variant/30 flex flex-col gap-2">
+                <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-4 px-4 py-3 rounded-full transition-all duration-150"
+                    href="#">
+                    <span class="material-symbols-outlined">help</span>
+                    <span class="font-label-md text-label-md">Bantuan</span>
+                </a>
+                <a class="text-error hover:bg-error-container/20 flex items-center gap-4 px-4 py-3 rounded-full transition-all duration-150"
+                    href="#">
+                    <span class="material-symbols-outlined">logout</span>
+                    <span class="font-label-md text-label-md">Logout</span>
+                </a>
+            </div>
+        </nav>
+        <!-- Helpdesk Info -->
+        <div class="mt-4 p-4 rounded-xl bg-primary-container text-on-primary-container">
+            <p class="text-[12px] font-bold mb-1">Butuh Bantuan?</p>
+            <p class="text-[11px] opacity-90 mb-3">Hubungi helpdesk kami jika mengalami kendala teknis.</p>
+            <div class="flex items-center gap-2 text-[12px]">
+                <span class="material-symbols-outlined text-[16px]">call</span>
+                <span>(0561) 123456</span>
+            </div>
+        </div>
+    </aside>
+    <!-- Main Content Canvas -->
+    <main class="flex-1 md:ml-72 min-h-screen bg-surface flex flex-col">
+        <!-- Top App Bar -->
+        <header
+            class="bg-surface sticky top-0 z-40 flex justify-between items-center px-margin-mobile md:px-gutter w-full max-w-container-max mx-auto h-16">
+            <div class="flex items-center gap-4">
+                <button class="md:hidden p-2 text-on-surface">
+                    <span class="material-symbols-outlined">menu</span>
+                </button>
+                <h2 class="font-headline-sm text-headline-sm-mobile md:text-headline-sm text-primary">Dashboard Utama
+                </h2>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="text-right hidden sm:block">
+                    <p class="text-label-md font-bold text-on-surface">Ahmad Fauzi</p>
+                    <p class="text-[12px] text-on-surface-variant">NIM: 12012001</p>
+                </div>
+                <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-bold">
+                    AF
+                </div>
+            </div>
+        </header>
+        <!-- Page Content -->
+        <div
+            class="flex-grow p-margin-mobile md:p-gutter max-w-container-max mx-auto w-full flex flex-col gap-stack-lg">
+            <!-- Welcome Banner -->
+            <section class="relative overflow-hidden rounded-xl bg-primary text-on-primary p-8 md:p-12 shadow-md">
+                <div class="relative z-10 flex flex-col md:flex-row justify-between items-center gap-6">
+                    <div class="max-w-2xl">
+                        <h3 class="font-headline-md text-headline-md mb-2">Selamat Datang Kembali, Fauzi!</h3>
+                        <p class="font-body-lg text-body-lg opacity-90">Lengkapi berkas pendaftaran Anda untuk
+                            mendapatkan kesempatan beasiswa unggulan IAIN Pontianak tahun akademik 2024/2025.</p>
+                        <button
+                            class="mt-6 px-6 py-3 bg-secondary-container text-on-secondary-container font-label-md rounded-full hover:scale-105 active:scale-95 transition-all duration-150 flex items-center gap-2">
+                            Lanjutkan Pengisian Profil
+                            <span class="material-symbols-outlined">arrow_forward</span>
+                        </button>
+                    </div>
+                    <!-- Circular Progress Visual -->
+                    <div class="flex flex-col items-center gap-2">
+                        <div class="relative w-32 h-32 flex items-center justify-center">
+                            <svg class="w-full h-full transform -rotate-90">
+                                <circle class="text-on-primary/20" cx="64" cy="64" fill="transparent" r="56"
+                                    stroke="currentColor" stroke-width="8"></circle>
+                                <circle class="text-secondary-fixed progress-ring-circle" cx="64" cy="64"
+                                    fill="transparent" r="56" stroke="currentColor" stroke-dasharray="351.8"
+                                    stroke-dashoffset="123.1" stroke-width="8"></circle>
+                            </svg>
+                            <div class="absolute inset-0 flex flex-col items-center justify-center">
+                                <span class="text-2xl font-bold">65%</span>
+                            </div>
+                        </div>
+                        <span class="text-xs uppercase tracking-widest font-bold">Kelengkapan</span>
+                    </div>
+                </div>
+                <!-- Subtle Background Pattern -->
+                <div
+                    class="absolute top-0 right-0 w-64 h-64 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4">
+                    <span class="material-symbols-outlined text-[200px]"
+                        style="font-variation-settings: 'FILL' 1;">account_balance</span>
+                </div>
+            </section>
+            <!-- Status Grid -->
+            <section>
+                <div class="flex justify-between items-end mb-stack-md">
+                    <div>
+                        <h4 class="font-headline-sm text-headline-sm text-on-surface">Status Persyaratan</h4>
+                        <p class="text-on-surface-variant">Klik pada kategori untuk memperbarui data Anda.</p>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-stack-md">
+                    <!-- Data Diri Card -->
+                    <div
+                        class="glass-card p-6 rounded-xl flex flex-col gap-4 hover:shadow-md transition-shadow group cursor-pointer border-l-4 border-l-primary">
+                        <div class="flex justify-between items-start">
+                            <div
+                                class="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                                <span class="material-symbols-outlined">badge</span>
+                            </div>
+                            <span
+                                class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded uppercase">Lengkap</span>
+                        </div>
+                        <div>
+                            <h5 class="font-headline-sm text-[16px] mb-1">Data Diri</h5>
+                            <p class="text-[12px] text-on-surface-variant line-clamp-2">Informasi identitas pribadi dan
+                                domisili.</p>
+                        </div>
+                    </div>
+                    <!-- Keluarga Card -->
+                    <div
+                        class="glass-card p-6 rounded-xl flex flex-col gap-4 hover:shadow-md transition-shadow group cursor-pointer border-l-4 border-l-primary">
+                        <div class="flex justify-between items-start">
+                            <div
+                                class="w-12 h-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                                <span class="material-symbols-outlined">family_restroom</span>
+                            </div>
+                            <span
+                                class="px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded uppercase">Lengkap</span>
+                        </div>
+                        <div>
+                            <h5 class="font-headline-sm text-[16px] mb-1">Keluarga</h5>
+                            <p class="text-[12px] text-on-surface-variant line-clamp-2">Informasi orang tua/wali dan
+                                tanggungan.</p>
+                        </div>
+                    </div>
+                    <!-- Akademik Card -->
+                    <div
+                        class="glass-card p-6 rounded-xl flex flex-col gap-4 hover:shadow-md transition-shadow group cursor-pointer border-l-4 border-l-secondary">
+                        <div class="flex justify-between items-start">
+                            <div
+                                class="w-12 h-12 rounded-lg bg-secondary/10 text-secondary flex items-center justify-center">
+                                <span class="material-symbols-outlined">school</span>
+                            </div>
+                            <span
+                                class="px-2 py-1 bg-yellow-100 text-yellow-700 text-[10px] font-bold rounded uppercase">Proses</span>
+                        </div>
+                        <div>
+                            <h5 class="font-headline-sm text-[16px] mb-1">Akademik</h5>
+                            <p class="text-[12px] text-on-surface-variant line-clamp-2">Riwayat pendidikan dan nilai
+                                rapor terakhir.</p>
+                        </div>
+                    </div>
+                    <!-- Ekonomi Card -->
+                    <div
+                        class="glass-card p-6 rounded-xl flex flex-col gap-4 hover:shadow-md transition-shadow group cursor-pointer border-l-4 border-l-error">
+                        <div class="flex justify-between items-start">
+                            <div class="w-12 h-12 rounded-lg bg-error/10 text-error flex items-center justify-center">
+                                <span class="material-symbols-outlined">payments</span>
+                            </div>
+                            <span
+                                class="px-2 py-1 bg-red-100 text-red-700 text-[10px] font-bold rounded uppercase">Belum</span>
+                        </div>
+                        <div>
+                            <h5 class="font-headline-sm text-[16px] mb-1">Ekonomi</h5>
+                            <p class="text-[12px] text-on-surface-variant line-clamp-2">Data penghasilan dan kondisi
+                                ekonomi keluarga.</p>
+                        </div>
+                    </div>
+                    <!-- Prestasi Card -->
+                    <div
+                        class="glass-card p-6 rounded-xl flex flex-col gap-4 hover:shadow-md transition-shadow group cursor-pointer border-l-4 border-l-primary/30">
+                        <div class="flex justify-between items-start">
+                            <div
+                                class="w-12 h-12 rounded-lg bg-surface-container-high text-on-surface-variant flex items-center justify-center">
+                                <span class="material-symbols-outlined">emoji_events</span>
+                            </div>
+                            <span
+                                class="px-2 py-1 bg-surface-container text-on-surface-variant text-[10px] font-bold rounded uppercase">Opsional</span>
+                        </div>
+                        <div>
+                            <h5 class="font-headline-sm text-[16px] mb-1">Prestasi</h5>
+                            <p class="text-[12px] text-on-surface-variant line-clamp-2">Sertifikat lomba atau organisasi
+                                (jika ada).</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- Lower Layout: News & Activity (Bento Style) -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-stack-lg">
+                <!-- Recent Announcement -->
+                <div class="lg:col-span-2 glass-card rounded-xl overflow-hidden">
+                    <div
+                        class="px-6 py-4 border-b border-outline-variant/30 flex justify-between items-center bg-surface-container-low">
+                        <h4 class="font-label-md text-label-md text-on-surface flex items-center gap-2">
+                            <span class="material-symbols-outlined text-[20px]">campaign</span>
+                            Pengumuman Terbaru
+                        </h4>
+                        <a class="text-[12px] text-primary font-bold hover:underline" href="#">Lihat Semua</a>
+                    </div>
+                    <div class="p-6 divide-y divide-outline-variant/30">
+                        <div class="pb-4 mb-4">
+                            <span
+                                class="text-[10px] font-bold text-secondary uppercase bg-secondary/10 px-2 py-0.5 rounded">Penting</span>
+                            <h5 class="font-bold text-on-surface mt-1">Perpanjangan Waktu Unggah Berkas Prestasi</h5>
+                            <p class="text-sm text-on-surface-variant mt-1">Batas waktu unggah berkas prestasi
+                                diperpanjang hingga tanggal 30 November 2024 pukul 23:59 WIB.</p>
+                            <p class="text-[11px] text-on-surface-variant/70 mt-2">Diterbitkan: 2 jam yang lalu</p>
+                        </div>
+                        <div class="pt-4">
+                            <span
+                                class="text-[10px] font-bold text-on-surface-variant uppercase bg-surface-container-high px-2 py-0.5 rounded">Info</span>
+                            <h5 class="font-bold text-on-surface mt-1">Panduan Pengisian Data Ekonomi</h5>
+                            <p class="text-sm text-on-surface-variant mt-1">Gunakan SKTM terbaru yang dikeluarkan oleh
+                                Kelurahan atau Kepala Desa setempat sebagai bukti utama.</p>
+                            <p class="text-[11px] text-on-surface-variant/70 mt-2">Diterbitkan: Kemarin</p>
+                        </div>
+                    </div>
+                </div>
+                <!-- Profile Action & Quick Contact -->
+                <div class="flex flex-col gap-stack-md">
+                    <div
+                        class="bg-surface-container-highest p-6 rounded-xl flex flex-col gap-4 border border-outline-variant/50">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm">
+                                <span class="material-symbols-outlined text-primary">verified_user</span>
+                            </div>
+                            <div>
+                                <h6 class="font-bold text-on-surface">Verifikasi Akun</h6>
+                                <p class="text-[12px] text-on-surface-variant">Akun Anda sedang dalam antrean
+                                    verifikasi.</p>
+                            </div>
+                        </div>
+                        <button
+                            class="w-full py-3 bg-white border border-primary text-primary font-label-md rounded-full hover:bg-primary/5 transition-colors">
+                            Cek Status Verifikasi
+                        </button>
+                    </div>
+                    <div class="glass-card p-6 rounded-xl flex flex-col gap-4">
+                        <h6 class="font-bold text-on-surface">Timeline Pendaftaran</h6>
+                        <div class="relative pl-6 border-l-2 border-primary/20 flex flex-col gap-6">
+                            <!-- Step 1 -->
+                            <div class="relative">
+                                <div
+                                    class="absolute -left-[33px] top-0 w-4 h-4 bg-primary rounded-full ring-4 ring-primary/20">
+                                </div>
+                                <p class="text-[11px] font-bold text-primary">SELESAI</p>
+                                <p class="text-[13px] font-bold">Pendaftaran Akun</p>
+                                <p class="text-[11px] text-on-surface-variant">10 Okt 2024</p>
+                            </div>
+                            <!-- Step 2 -->
+                            <div class="relative">
+                                <div
+                                    class="absolute -left-[33px] top-0 w-4 h-4 bg-secondary-fixed-dim rounded-full ring-4 ring-secondary-fixed-dim/20">
+                                </div>
+                                <p class="text-[11px] font-bold text-secondary">SEDANG BERLANGSUNG</p>
+                                <p class="text-[13px] font-bold">Pengisian Data &amp; Berkas</p>
+                                <p class="text-[11px] text-on-surface-variant">Target: 30 Nov 2024</p>
+                            </div>
+                            <!-- Step 3 -->
+                            <div class="relative">
+                                <div class="absolute -left-[33px] top-0 w-4 h-4 bg-outline-variant rounded-full"></div>
+                                <p class="text-[11px] font-bold text-on-surface-variant/50">MENDATANG</p>
+                                <p class="text-[13px] font-bold text-on-surface-variant/70">Wawancara Seleksi</p>
+                                <p class="text-[11px] text-on-surface-variant/50">Desember 2024</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Footer -->
+        <footer class="bg-primary dark:bg-primary-container mt-stack-lg">
+            <div
+                class="flex flex-col md:flex-row justify-between items-center py-stack-lg px-margin-mobile md:px-gutter max-w-container-max mx-auto gap-stack-md text-on-primary">
+                <div class="flex flex-col items-center md:items-start gap-1">
+                    <span class="font-headline-sm text-headline-sm">IAIN Pontianak</span>
+                    <p class="font-body-md text-body-md opacity-80 text-center md:text-left">© 2024 IAIN Pontianak. All
+                        Rights Reserved.</p>
+                </div>
+                <div class="flex gap-stack-md">
+                    <a class="text-on-primary/80 hover:text-secondary-fixed transition-colors font-label-md"
+                        href="#">Kebijakan Privasi</a>
+                    <a class="text-on-primary/80 hover:text-secondary-fixed transition-colors font-label-md"
+                        href="#">Syarat &amp; Ketentuan</a>
+                    <a class="text-on-primary/80 hover:text-secondary-fixed transition-colors font-label-md"
+                        href="#">Hubungi Kami</a>
+                </div>
+            </div>
+        </footer>
+    </main>
+    <!-- Mobile Navigation Bar -->
+    <div
+        class="fixed bottom-0 left-0 w-full bg-surface border-t border-outline-variant/30 md:hidden z-50 px-4 h-16 flex items-center justify-around shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+        <a class="flex flex-col items-center text-primary" href="#">
+            <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+            <span class="text-[10px] font-bold">Dashboard</span>
+        </a>
+        <a class="flex flex-col items-center text-on-surface-variant" href="#">
+            <span class="material-symbols-outlined">person</span>
+            <span class="text-[10px]">Profil</span>
+        </a>
+        <a class="flex flex-col items-center text-on-surface-variant" href="#">
+            <span class="material-symbols-outlined">folder_open</span>
+            <span class="text-[10px]">Berkas</span>
+        </a>
+        <a class="flex flex-col items-center text-on-surface-variant" href="#">
+            <span class="material-symbols-outlined">notifications</span>
+            <span class="text-[10px]">Info</span>
+        </a>
+    </div>
+    <!-- Micro-interaction Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Placeholder for interactivity like menu toggles or ripple effects
+            const cards = document.querySelectorAll('.glass-card');
+            cards.forEach(card => {
+                card.addEventListener('mousedown', () => {
+                    card.style.transform = 'scale(0.98)';
+                });
+                card.addEventListener('mouseup', () => {
+                    card.style.transform = 'scale(1)';
+                });
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = 'scale(1)';
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

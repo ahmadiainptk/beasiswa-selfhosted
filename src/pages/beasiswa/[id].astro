@@ -1,0 +1,75 @@
+---
+// path: src/pages/beasiswa/[id].astro
+import PublicLayout from "../../layouts/PublicLayout.astro";
+import { drizzle } from "drizzle-orm/d1";
+import { eq } from "drizzle-orm";
+import * as schema from "../../db/schema";
+import { beasiswa as beasiswaTable } from "../../db/schema";
+
+const id = parseInt(Astro.params.id || '0');
+if (!id) return Astro.redirect('/beasiswa');
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+const rows = await db.select().from(beasiswaTable).where(eq(beasiswaTable.id, id)).limit(1);
+if (rows.length === 0 || !rows[0].aktif) return Astro.redirect('/beasiswa');
+
+const b = rows[0];
+
+const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+---
+
+<PublicLayout title={b.nama} description={b.deskripsi || undefined}>
+  <main class="max-w-[1280px] mx-auto px-gutter py-16">
+    <a href="/beasiswa" class="inline-flex items-center gap-2 text-primary hover:underline text-sm mb-8">
+      <span class="material-symbols-outlined text-lg">arrow_back</span>
+      Kembali ke daftar beasiswa
+    </a>
+
+    <article class="max-w-3xl">
+      <h1 class="text-3xl font-extrabold font-[Montserrat] text-on-surface mb-4">{b.nama}</h1>
+      
+      <div class="flex flex-wrap gap-4 text-sm text-outline mb-8">
+        {b.dibukaPada && (
+          <span class="flex items-center gap-1.5 bg-primary-container/20 text-primary px-3 py-1 rounded-full">
+            <span class="material-symbols-outlined text-sm">calendar_today</span>
+            Dibuka: {fmtDate(b.dibukaPada)}
+          </span>
+        )}
+        {b.ditutupPada && (
+          <span class="flex items-center gap-1.5 bg-error-container/20 text-error px-3 py-1 rounded-full">
+            <span class="material-symbols-outlined text-sm">event_busy</span>
+            Ditutup: {fmtDate(b.ditutupPada)}
+          </span>
+        )}
+      </div>
+
+      {b.deskripsi && (
+        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 mb-8">
+          <h2 class="text-lg font-semibold text-on-surface mb-2">Deskripsi</h2>
+          <p class="text-on-surface-variant leading-relaxed">{b.deskripsi}</p>
+        </div>
+      )}
+
+      {b.persyaratan && (
+        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant p-6 mb-8">
+          <h2 class="text-lg font-semibold text-on-surface mb-2">Persyaratan</h2>
+          <div class="text-on-surface-variant leading-relaxed whitespace-pre-wrap">{b.persyaratan}</div>
+        </div>
+      )}
+
+      <div class="mt-10 flex gap-4">
+        <a href="/login" class="inline-flex items-center gap-2 bg-primary text-on-primary px-8 py-3 rounded-full text-sm font-semibold tracking-wider hover:opacity-90 transition">
+          Daftar Sekarang
+          <span class="material-symbols-outlined text-lg">arrow_forward</span>
+        </a>
+        <a href={`/pengumuman/${b.id}`} class="inline-flex items-center gap-2 border border-outline text-on-surface-variant px-8 py-3 rounded-full text-sm font-semibold tracking-wider hover:bg-surface-container-high transition">
+          <span class="material-symbols-outlined text-lg">campaign</span>
+          Pengumuman
+        </a>
+        <a href="/beasiswa" class="inline-flex items-center gap-2 border border-outline text-on-surface-variant px-8 py-3 rounded-full text-sm font-semibold tracking-wider hover:bg-surface-container-high transition">
+          Beasiswa Lainnya
+        </a>
+      </div>
+    </article>
+  </main>
+</PublicLayout>

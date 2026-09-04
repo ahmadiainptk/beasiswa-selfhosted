@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap"
+        rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=block"
+        rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">try {
+            tailwind.config = {
+                darkMode: "class",
+                theme: {
+                    extend: {
+                        "colors": {
+                            "on-tertiary-container": "#b0dcc4",
+                            "on-tertiary-fixed": "#002114",
+                            "tertiary-fixed-dim": "#a5d0b9",
+                            "on-background": "#191c1d",
+                            "error-container": "#ffdad6",
+                            "secondary": "#735c00",
+                            "tertiary": "#224a39",
+                            "surface-container-low": "#f3f4f5",
+                            "error": "#ba1a1a",
+                            "on-error": "#ffffff",
+                            "secondary-fixed-dim": "#e9c349",
+                            "secondary-fixed": "#ffe088",
+                            "on-surface": "#191c1d",
+                            "on-primary": "#ffffff",
+                            "tertiary-container": "#3a624f",
+                            "on-secondary-container": "#745c00",
+                            "primary-fixed": "#9ef6b6",
+                            "on-tertiary-fixed-variant": "#274e3d",
+                            "on-secondary": "#ffffff",
+                            "on-primary-fixed": "#00210e",
+                            "surface": "#f8f9fa",
+                            "background": "#f8f9fa",
+                            "secondary-container": "#fed65b",
+                            "on-primary-container": "#8ee4a6",
+                            "on-error-container": "#93000a",
+                            "tertiary-fixed": "#c1ecd4",
+                            "surface-container-high": "#e7e8e9",
+                            "surface-dim": "#d9dadb",
+                            "surface-bright": "#f8f9fa",
+                            "on-secondary-fixed": "#241a00",
+                            "surface-container-lowest": "#ffffff",
+                            "on-surface-variant": "#3f4940",
+                            "on-tertiary": "#ffffff",
+                            "inverse-on-surface": "#f0f1f2",
+                            "on-secondary-fixed-variant": "#574500",
+                            "inverse-primary": "#83d99c",
+                            "outline-variant": "#bec9be",
+                            "inverse-surface": "#2e3132",
+                            "surface-variant": "#e1e3e4",
+                            "on-primary-fixed-variant": "#00522a",
+                            "outline": "#6f7a70",
+                            "surface-container-highest": "#e1e3e4",
+                            "primary-container": "#006837",
+                            "primary": "#004d27",
+                            "surface-container": "#edeeef",
+                            "surface-tint": "#0b6d3b",
+                            "primary-fixed-dim": "#83d99c"
+                        },
+                        "borderRadius": {
+                            "DEFAULT": "0.125rem",
+                            "lg": "0.25rem",
+                            "xl": "0.5rem",
+                            "full": "0.75rem"
+                        },
+                        "spacing": {
+                            "container-max": "1280px",
+                            "stack-sm": "8px",
+                            "margin-mobile": "16px",
+                            "section-gap": "80px",
+                            "gutter": "24px",
+                            "stack-md": "16px",
+                            "stack-lg": "32px"
+                        },
+                        "fontFamily": {
+                            "label-md": ["Inter"],
+                            "body-md": ["Inter"],
+                            "display-lg": ["Montserrat"],
+                            "headline-sm": ["Montserrat"],
+                            "body-lg": ["Inter"],
+                            "headline-md": ["Montserrat"],
+                            "display-lg-mobile": ["Montserrat"]
+                        },
+                        "fontSize": {
+                            "label-md": ["14px", { "lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                            "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                            "display-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                            "headline-sm": ["24px", { "lineHeight": "1.4", "fontWeight": "600" }],
+                            "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                            "headline-md": ["32px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                            "display-lg-mobile": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }]
+                        }
+                    },
+                },
+            }
+        } catch (_e) { }</script>
+    <meta charset="utf-8">
+</head>
+
+<body class="bg-surface text-on-surface font-body-md overflow-x-hidden">
+    <!-- TopAppBar -->
+    <nav class="sticky top-0 z-50 bg-surface/95 backdrop-blur-md">
+        <div
+            class="flex justify-between items-center px-margin-mobile md:px-gutter w-full max-w-container-max mx-auto h-16">
+            <div class="flex items-center gap-stack-sm">
+                <span class="material-symbols-outlined text-primary text-3xl" data-icon="account_balance"
+                    data-original-icon="account_balance">account_balance</span>
+                <span class="font-headline-sm text-headline-sm-mobile md:text-headline-sm text-primary">Beasiswa IAIN
+                    Pontianak</span>
+            </div>
+            <!-- Desktop Nav -->
+            <div class="hidden md:flex items-center gap-8">
+                <a href="#" class="text-primary font-bold border-b-2 border-primary pb-1 transition-all">Home</a>
+                <a href="#"
+                    class="text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors duration-200">Blog</a>
+                <a href="#"
+                    class="text-on-surface-variant font-label-md text-label-md hover:text-primary transition-colors duration-200">List
+                    Peserta</a>
+                <button
+                    class="bg-primary text-on-primary px-6 py-2 rounded-lg font-label-md hover:opacity-90 active:scale-95 transition-all">Login</button>
+            </div>
+            <!-- Mobile Menu Toggle -->
+            <button class="md:hidden p-2 text-primary">
+                <span class="material-symbols-outlined" data-icon="menu">menu</span>
+            </button>
+        </div>
+    </nav>
+    <main>
+        <!-- Hero Section -->
+        <section class="relative min-h-[90vh] flex items-center pt-16 overflow-hidden">
+            <!-- Animated Shader Background Wrapper -->
+            <div class="absolute inset-0 -z-10 bg-surface-container-lowest">
+
+                <!-- Decorative Geometric Accents -->
+                <div class="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none">
+                    <svg class="w-full h-full" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+                        <path
+                            d="M47,-62.1C58.7,-53.4,64.4,-36.5,68.2,-19.7C71.9,-2.9,73.8,13.9,67.6,26.8C61.4,39.8,47.1,48.9,33.1,55.8C19,62.7,5.2,67.4,-9.1,66.1C-23.4,64.8,-38.3,57.5,-49.2,46.5C-60,35.5,-66.8,20.8,-68.9,5.5C-71,-9.8,-68.4,-25.7,-60,-38.4C-51.6,-51.2,-37.4,-60.8,-23.4,-67.2C-9.3,-73.6,4.6,-76.8,19,-73.5C33.4,-70.2,48.2,-60.4,47,-62.1Z"
+                            fill="#004d27" transform="translate(200 200)"></path>
+                    </svg>
+                </div>
+            </div>
+            <div
+                class="max-w-container-max mx-auto px-margin-mobile md:px-gutter grid grid-cols-1 lg:grid-cols-12 gap-stack-lg items-center">
+                <!-- Headline Content -->
+                <div class="lg:col-span-7 space-y-stack-md">
+                    <span
+                        class="inline-block py-1 px-4 bg-secondary-container text-on-secondary-fixed-variant rounded-full font-label-md text-label-md">Penerimaan
+                        TA 2024/2025</span>
+                    <h1
+                        class="font-display-lg-mobile md:font-display-lg text-display-lg-mobile md:text-display-lg text-primary leading-tight">
+                        Pendaftaran Beasiswa <br class="hidden md:block"> IAIN Pontianak
+                    </h1>
+                    <p class="font-body-lg text-body-lg text-on-surface-variant max-w-xl">
+                        Raih kesempatan pendidikan terbaik melalui program dukungan finansial yang komprehensif.
+                        Wujudkan mimpi akademis Anda bersama kampus terkemuka di Kalimantan Barat.
+                    </p>
+                    <div class="flex flex-wrap gap-4 pt-4">
+                        <button
+                            class="bg-primary text-on-primary px-8 py-4 rounded-xl font-headline-sm text-label-md shadow-lg hover:shadow-primary/20 hover:-translate-y-1 transition-all duration-300">
+                            Daftar Sekarang
+                        </button>
+                        <button
+                            class="border-2 border-secondary text-secondary px-8 py-4 rounded-xl font-label-md hover:bg-secondary/5 transition-all">
+                            Panduan Pendaftaran
+                        </button>
+                    </div>
+                </div>
+                <!-- Widget Area (Scholarship List & Countdown) -->
+                <div class="lg:col-span-5 flex flex-col gap-stack-md">
+                    <!-- Countdown Widget -->
+
+                    <!-- Scholarship Active List -->
+                    <div class="bg-white p-stack-md rounded-2xl shadow-sm space-y-4">
+                        <h3 class="font-headline-sm text-[18px] text-primary">Program Beasiswa Aktif</h3>
+                        <div class="space-y-3">
+                            <!-- KIP-K Card -->
+                            <div
+                                class="group flex items-center justify-between p-3 rounded-xl border border-outline-variant hover:border-primary transition-colors cursor-pointer">
+                                <div class="flex items-center gap-3">
+                                    <div
+                                        class="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
+                                        <span class="material-symbols-outlined" data-icon="school">school</span>
+                                    </div>
+                                    <div class="">
+                                        <h4 class="font-label-md text-on-surface">Beasiswa KIP-Kuliah</h4><span
+                                            class="inline-block text-[10px] font-bold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full mt-1">Berakhir
+                                            dalam 12:05:42</span>
+                                        <p class="text-xs text-on-surface-variant">Bantuan biaya hidup &amp; SPP</p>
+                                    </div>
+                                </div>
+                                <span
+                                    class="material-symbols-outlined text-outline group-hover:text-primary transition-all"
+                                    data-icon="chevron_right">chevron_right</span>
+                            </div>
+                            <!-- Prestasi Card -->
+                            <div
+                                class="group flex items-center justify-between p-3 rounded-xl border border-outline-variant hover:border-primary transition-colors cursor-pointer">
+                                <div class="flex items-center gap-3">
+                                    <div
+                                        class="w-12 h-12 rounded-lg bg-secondary/10 flex items-center justify-center text-secondary">
+                                        <span class="material-symbols-outlined" data-icon="military_tech"
+                                            data-weight="fill">military_tech</span>
+                                    </div>
+                                    <div class="">
+                                        <h4 class="font-label-md text-on-surface">Beasiswa Prestasi</h4><span
+                                            class="inline-block text-[10px] font-bold text-secondary bg-secondary/10 px-2 py-0.5 rounded-full mt-1">5
+                                            Hari lagi</span>
+                                        <p class="text-xs text-on-surface-variant">Akademik &amp; Non-Akademik</p>
+                                    </div>
+                                </div>
+                                <span
+                                    class="material-symbols-outlined text-outline group-hover:text-primary transition-all"
+                                    data-icon="chevron_right">chevron_right</span>
+                            </div>
+                        </div>
+                        <a class="block text-center text-primary font-label-md text-label-md py-2 border-t border-surface-container mt-2 hover:underline"
+                            href="#">Lihat Semua Kategori</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <!-- News Section -->
+        <section class="py-section-gap bg-surface-container-low">
+            <div class="max-w-container-max mx-auto px-margin-mobile md:px-gutter">
+                <div class="flex justify-between items-end mb-stack-lg">
+                    <div class="space-y-2">
+                        <h2 class="font-headline-md text-headline-md text-primary">Berita Terbaru</h2>
+                        <div class="h-1.5 w-24 bg-secondary rounded-full"></div>
+                    </div>
+                    <a class="hidden md:flex items-center gap-2 text-primary font-label-md hover:underline" href="#">
+                        Lihat Blog Selengkapnya
+                        <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+                    </a>
+                </div>
+                <!-- 2x2 Bento Grid Pattern -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-stack-lg">
+                    <!-- News Item 1 -->
+                    <article
+                        class="group bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col sm:flex-row hover:shadow-md transition-shadow">
+                        <div class="sm:w-2/5 h-48 sm:h-auto relative overflow-hidden">
+                            <img class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                data-alt="Close-up of Indonesian university students in green alma mater jackets smiling and holding textbooks in a modern campus courtyard during a bright, sunny afternoon. The lighting is warm and golden, emphasizing the high-end academic prestige of IAIN Pontianak. The style is professional and optimistic."
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuB5abvywa5HNmBspEBRJDkKQ3-_Yc5GOMEsOML_CnxvCt6HxMEe60tq2a3HoNo6R2-dFMxNUhPiRLuRqNvFNiO4Klb-aoqtc0X68VehSKE5mbKgt7iFFAMXIfGF1SgHOu9Vely9Niuvw5j2mOQgUtNtSvSR37O5kdFhnQwJnU6IhWnUFQ9MiWY9Os1zvjmtu-0FLBo7nXKvs9sxFAwcCtZhNOQ_MSFjN5seWskpESTUyfWNeV5n4FX58Q">
+                        </div>
+                        <div class="p-stack-md sm:w-3/5 flex flex-col justify-center">
+                            <div
+                                class="flex items-center gap-2 text-xs text-secondary mb-2 uppercase font-bold tracking-widest">
+                                <span class="material-symbols-outlined text-xs"
+                                    data-icon="calendar_today">calendar_today</span>
+                                20 Mei 2024
+                            </div>
+                            <h3
+                                class="font-headline-sm text-[18px] text-on-surface mb-2 group-hover:text-primary transition-colors leading-snug">
+                                Tips Lolos Seleksi Wawancara Beasiswa KIP-Kuliah 2024
+                            </h3>
+                            <p class="text-on-surface-variant text-sm line-clamp-2">
+                                Persiapkan diri Anda dengan matang melalui panduan lengkap teknik menjawab pertanyaan
+                                wawancara dari para pakar...
+                            </p>
+                        </div>
+                    </article>
+                    <!-- News Item 2 -->
+                    <article
+                        class="group bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col sm:flex-row hover:shadow-md transition-shadow">
+                        <div class="sm:w-2/5 h-48 sm:h-auto relative overflow-hidden">
+                            <img class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                data-alt="Modern wide-angle view of the IAIN Pontianak campus gate and main building during twilight, with soft ambient light reflecting off the glass facades. The architecture blends modern design with subtle Islamic geometric patterns. The overall mood is serene and welcoming, featuring lush tropical greenery."
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOy-gWx0XNVA0TBKdbUBXAU6U-4Q04cooISY5daaO9zJgmuqoj_GDSY7C_AKcXPGzlz0-otsd0RSy5GXo0lY-_cA43j_ntLFktKnaEFZusPGWlgbf-fIR9GFT8nFTAxnH86vokmP40BQpM4R_Sk4yo7p5_4Z-YV2BzllY4Dm5quHOnV0YiGC8hKo6c3kiVIT6nMtbvgRy_ff1cZVvdGr1IGLX86Hmf-2t30f8assLGqJBEfG9Gwa219g">
+                        </div>
+                        <div class="p-stack-md sm:w-3/5 flex flex-col justify-center">
+                            <div
+                                class="flex items-center gap-2 text-xs text-secondary mb-2 uppercase font-bold tracking-widest">
+                                <span class="material-symbols-outlined text-xs" data-icon="campaign">campaign</span>
+                                18 Mei 2024
+                            </div>
+                            <h3
+                                class="font-headline-sm text-[18px] text-on-surface mb-2 group-hover:text-primary transition-colors leading-snug">
+                                Perpanjangan Waktu Pendaftaran Jalur Prestasi Khusus Hafidz
+                            </h3>
+                            <p class="text-on-surface-variant text-sm line-clamp-2">
+                                Kabar gembira bagi calon mahasiswa yang memiliki sertifikat tahfidz, batas pendaftaran
+                                diperpanjang hingga akhir bulan ini...
+                            </p>
+                        </div>
+                    </article>
+                    <!-- News Item 3 -->
+                    <article
+                        class="group bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col sm:flex-row hover:shadow-md transition-shadow">
+                        <div class="sm:w-2/5 h-48 sm:h-auto relative overflow-hidden">
+                            <img class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                data-alt="A brightly lit indoor auditorium setting where a row of students is receiving award certificates from faculty members. The atmosphere is formal and celebratory, featuring deep green and gold colors. High-quality corporate event photography style with shallow depth of field focusing on a joyful student."
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCYCmfzyeTLrenXSd5n9kfRJnMkpBzkTp5iB7tZVjQZkq9t_LLejsb02rlJ6JkGZ00UGqmjI97wdBtZ5QB10Gs5OdSz45e7B627GupTSr5OXtc3qMaGxgrJcl1eY3N3yX3eZwBImDpDtnZfbY8w-kfw11846-Qk9xbCyKol7FKpo-yX-LSqDZeqJDcFahttI6ULaIhsMdMggvHqNY8z83bovmi9iYBymSMV6fWUiRpMCODour8yt5lXDA">
+                        </div>
+                        <div class="p-stack-md sm:w-3/5 flex flex-col justify-center">
+                            <div
+                                class="flex items-center gap-2 text-xs text-secondary mb-2 uppercase font-bold tracking-widest">
+                                <span class="material-symbols-outlined text-xs" data-icon="article">article</span>
+                                15 Mei 2024
+                            </div>
+                            <h3
+                                class="font-headline-sm text-[18px] text-on-surface mb-2 group-hover:text-primary transition-colors leading-snug">
+                                Kisah Inspiratif: Alumnus Beasiswa yang Kini Berkarir di Luar Negeri
+                            </h3>
+                            <p class="text-on-surface-variant text-sm line-clamp-2">
+                                Muhammad Rizky menceritakan perjalanannya dari mahasiswa penerima bantuan biaya
+                                pendidikan hingga sukses meraih karir internasional...
+                            </p>
+                        </div>
+                    </article>
+                    <!-- News-->
+                    <article
+                        class="group bg-white rounded-2xl overflow-hidden shadow-sm flex flex-col sm:flex-row hover:shadow-md transition-shadow">
+                        <div class="sm:w-2/5 h-48 sm:h-auto relative overflow-hidden">
+                            <img class="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                data-alt="Close-up of hands typing on a modern laptop in a well-lit library, surrounded by textbooks and a notebook. A small coffee cup sits nearby. The lighting is natural and bright, conveying a sense of focused study and digital productivity in a light-mode aesthetic. High resolution and clean."
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuByi-Kl7HizwpRUgzMOScfiJ6j5VsrKjS-SQ8MT49qF1QTKRg7CD9DIMiJ-BmIZx02NmQ66qSqE5WMMhNrrbOYGs-yzA3WN2iRv5PZpXiFoByd6vTy4DjTnVaNxfyV6Zv-cn6876GNJKvRDv-eNwdqUBcOK9NGIaClkaHq856czpOE_DvnInxPKTHWSu8u8vXR-slceWlETPPhkxXEggHStCpkKXMIgC866lLvDQ_RkdgsJEOUIoqmHGw">
+                        </div>
+                        <div class="p-stack-md sm:w-3/5 flex flex-col justify-center">
+                            <div
+                                class="flex items-center gap-2 text-xs text-secondary mb-2 uppercase font-bold tracking-widest">
+                                <span class="material-symbols-outlined text-xs" data-icon="info">info</span>
+                                12 Mei 2024
+                            </div>
+                            <h3
+                                class="font-headline-sm text-[18px] text-on-surface mb-2 group-hover:text-primary transition-colors leading-snug">
+                                Cara Verifikasi Berkas Online Tanpa Kendala Teknis
+                            </h3>
+                            <p class="text-on-surface-variant text-sm line-clamp-2">
+                                Ikuti langkah-langkah mudah berikut untuk memastikan dokumen Anda terbaca jelas oleh
+                                sistem seleksi kami...
+                            </p>
+                        </div>
+                    </article>
+                </div>
+                <!-- Mobile Only CTA -->
+                <div class="mt-8 text-center md:hidden">
+                    <button class="text-primary font-label-md flex items-center gap-2 mx-auto">
+                        Lihat Berita Lainnya
+                        <span class="material-symbols-outlined" data-icon="arrow_right_alt">arrow_right_alt</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+        <!-- Eligibility Callout -->
+        <section class="py-section-gap max-w-container-max mx-auto px-margin-mobile md:px-gutter">
+            <div
+                class="bg-primary-container rounded-3xl p-stack-lg md:p-12 text-center text-on-primary relative overflow-hidden">
+                <div class="relative z-10 space-y-6">
+                    <h2
+                        class="font-display-lg-mobile md:font-display-lg text-display-lg-mobile md:text-display-lg text-on-primary-container">
+                        Sudah Siap Melangkah Lebih Jauh?</h2>
+                    <p class="font-body-lg text-on-primary/80 max-w-2xl mx-auto">Jangan biarkan kendala ekonomi
+                        menghalangi impian akademikmu. Daftar hari ini dan bergabunglah dengan komunitas cendekiawan
+                        muslim yang progresif.</p>
+                    <div class="pt-4">
+                        <button
+                            class="bg-secondary-container text-on-secondary-fixed-variant font-headline-sm text-label-md px-10 py-4 rounded-full hover:scale-105 transition-transform">
+                            Buat Akun Sekarang
+                        </button>
+                    </div>
+                </div>
+                <!-- Abstract Design in background -->
+                <div class="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                    <div
+                        class="absolute -top-1/2 -left-1/4 w-full h-full border-[40px] border-on-primary-container rounded-full rotate-45">
+                    </div>
+                    <div
+                        class="absolute -bottom-1/2 -right-1/4 w-full h-full border-[20px] border-on-primary-container rounded-full -rotate-12">
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <!-- Footer -->
+    <footer class="bg-primary text-on-primary">
+        <div class="max-w-container-max mx-auto px-margin-mobile md:px-gutter py-12 md:py-16">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-stack-lg mb-12 border-b border-white/10 pb-12">
+                <div class="col-span-1 md:col-span-2 space-y-6">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-3xl"
+                            data-icon="account_balance">account_balance</span>
+                        <span class="font-headline-sm text-headline-sm text-on-primary">IAIN Pontianak</span>
+                    </div>
+                    <p class="text-on-primary/70 max-w-sm">
+                        Jl. Letkol Sugiyono No. 07, Pontianak, Kalimantan Barat. Mengintegrasikan ilmu, iman, dan
+                        teknologi untuk masa depan yang lebih cerah.
+                    </p>
+                    <div class="flex gap-4">
+                        <a class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-secondary transition-colors"
+                            href="#">
+                            <span class="material-symbols-outlined text-lg" data-icon="public">public</span>
+                        </a>
+                        <a class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-secondary transition-colors"
+                            href="#">
+                            <span class="material-symbols-outlined text-lg"
+                                data-icon="alternate_email">alternate_email</span>
+                        </a>
+                        <a class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-secondary transition-colors"
+                            href="#">
+                            <span class="material-symbols-outlined text-lg" data-icon="phone_iphone">phone_iphone</span>
+                        </a>
+                    </div>
+                </div>
+                <div class="space-y-6">
+                    <h4 class="font-headline-sm text-[18px]">Navigasi</h4>
+                    <ul class="space-y-3">
+                        <li class=""><a class="text-on-primary/70 hover:text-on-primary transition-colors"
+                                href="#">Tentang Beasiswa</a></li>
+                        <li class=""><a class="text-on-primary/70 hover:text-on-primary transition-colors" href="#">Alur
+                                Pendaftaran</a></li>
+                        <li class=""><a class="text-on-primary/70 hover:text-on-primary transition-colors"
+                                href="#">Daftar FAQ</a></li>
+                        <li class=""><a class="text-on-primary/70 hover:text-on-primary transition-colors"
+                                href="#">Pengumuman</a></li>
+                    </ul>
+                </div>
+                <div class="space-y-6">
+                    <h4 class="font-headline-sm text-[18px]">Legalitas</h4>
+                    <ul class="space-y-3">
+                        <li class=""><a class="text-on-primary/70 hover:text-on-primary transition-colors"
+                                href="#">Kebijakan Privasi</a></li>
+                        <li class=""><a class="text-on-primary/70 hover:text-on-primary transition-colors"
+                                href="#">Syarat &amp; Ketentuan</a></li>
+                        <li class=""><a class="text-on-primary/70 hover:text-on-primary transition-colors" href="#">Peta
+                                Situs</a></li>
+                        <li class=""><a class="text-on-primary/70 hover:text-on-primary transition-colors"
+                                href="#">Hubungi Kami</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="flex flex-col md:flex-row justify-between items-center gap-stack-md text-sm text-on-primary/50">
+                <p class="">© 2024 IAIN Pontianak. All Rights Reserved.</p>
+                <div class="flex gap-6">
+                    <span class="">Designed with </span>
+                    <span class="material-symbols-outlined text-sm text-secondary animate-pulse" data-icon="favorite"
+                        data-weight="fill">favorite</span>
+                    <span class="">for Education</span>
+                </div>
+            </div>
+        </div>
+    </footer>
+    <script>
+        // Simple Countdown Logic
+        function updateCountdown() {
+            const daysEl = document.getElementById('days');
+            const hoursEl = document.getElementById('hours');
+            const minutesEl = document.getElementById('minutes');
+            const secondsEl = document.getElementById('seconds');
+
+            let d = parseInt(daysEl.innerText);
+            let h = parseInt(hoursEl.innerText);
+            let m = parseInt(minutesEl.innerText);
+            let s = parseInt(secondsEl.innerText);
+
+            if (s > 0) s--;
+            else {
+                s = 59;
+                if (m > 0) m--;
+                else {
+                    m = 59;
+                    if (h > 0) h--;
+                    else {
+                        h = 23;
+                        if (d > 0) d--;
+                    }
+                }
+            }
+
+            daysEl.innerText = d.toString().padStart(2, '0');
+            hoursEl.innerText = h.toString().padStart(2, '0');
+            minutesEl.innerText = m.toString().padStart(2, '0');
+            secondsEl.innerText = s.toString().padStart(2, '0');
+        }
+
+        setInterval(updateCountdown, 1000);
+
+        // Simple Mobile Menu (Visual toggle only for demo)
+        const mobileBtn = document.querySelector('nav button.md\\:hidden');
+        mobileBtn.addEventListener('click', () => {
+            alert('Menu navigasi akan muncul di sini (Mobile Drawer).');
+        });
+    </script>
+
+</body>
+
+</html>

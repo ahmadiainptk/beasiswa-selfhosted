@@ -1,0 +1,282 @@
+---
+// path: src/pages/admin/pendaftaran/[id].astro
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import * as schema from '../../../db/schema';
+import { users, identitasPribadi, riwayatPendidikan, prestasiTahfidz, identitasKeluarga, kondisiRumah, domisiliOrtu, kebutuhanKhusus, dokumen, pendaftaran, beasiswa } from '../../../db/schema';
+import { verifyGardaToken } from "../../../lib/auth";
+
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+const id = parseInt(Astro.params.id || '0');
+if (!id) return Astro.redirect('/admin/pendaftaran');
+
+const targetRows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+if (targetRows.length === 0 || targetRows[0].role !== 'mahasiswa') return Astro.redirect('/admin/pendaftaran');
+const mhs = targetRows[0];
+
+const [s1, s2, s3, s4, s5, s6, s7] = await Promise.all([
+  db.select().from(identitasPribadi).where(eq(identitasPribadi.userId, id)).limit(1),
+  db.select().from(riwayatPendidikan).where(eq(riwayatPendidikan.userId, id)).limit(1),
+  db.select().from(prestasiTahfidz).where(eq(prestasiTahfidz.userId, id)).limit(1),
+  db.select().from(identitasKeluarga).where(eq(identitasKeluarga.userId, id)).limit(1),
+  db.select().from(kondisiRumah).where(eq(kondisiRumah.userId, id)).limit(1),
+  db.select().from(domisiliOrtu).where(eq(domisiliOrtu.userId, id)).limit(1),
+  db.select().from(kebutuhanKhusus).where(eq(kebutuhanKhusus.userId, id)).limit(1),
+]);
+
+const docs = await db.select().from(dokumen).where(eq(dokumen.userId, id));
+
+const daftarList = await db.select({
+  id: pendaftaran.id, status: pendaftaran.status, catatanAdmin: pendaftaran.catatanAdmin,
+  createdAt: pendaftaran.createdAt, beasiswaNama: beasiswa.nama,
+}).from(pendaftaran).innerJoin(beasiswa, eq(pendaftaran.beasiswaId, beasiswa.id))
+  .where(eq(pendaftaran.userId, id));
+
+const sections = [
+  { title: '1. Identitas Pribadi', data: s1[0] || null },
+  { title: '2. Riwayat Pendidikan', data: s2[0] || null },
+  { title: '3. Prestasi & Tahfidz', data: s3[0] || null },
+  { title: '4. Identitas Keluarga', data: s4[0] || null },
+  { title: '5. Kondisi Rumah', data: s5[0] || null },
+  { title: '6. Domisili Ortu / Wali', data: s6[0] || null },
+  { title: '7. Kebutuhan Khusus', data: s7[0] || null },
+];
+
+const statusConfig: Record<string, { label: string; color: string }> = {
+  incomplete: { label: 'Belum Lengkap', color: 'amber' },
+  pending: { label: 'Menunggu Verifikasi', color: 'blue' },
+  verified: { label: 'Terverifikasi', color: 'green' },
+  rejected: { label: 'Ditolak', color: 'red' },
+};
+const st = statusConfig[mhs.profileStatus] || { label: mhs.profileStatus, color: 'slate' };
+
+// Label maps untuk format teks yang baku
+const labelMap: Record<string, string> = {
+  nama: 'Nama', nik: 'NIK', nim: 'NIM', namaLengkap: 'Nama Lengkap',
+  tempatLahir: 'Tempat Lahir', tanggalLahir: 'Tanggal Lahir',
+  jenisKelamin: 'Jenis Kelamin', golonganDarah: 'Golongan Darah',
+  agama: 'Agama', noHp: 'No HP', email: 'Email',
+  anakKe: 'Anak ke-', jumlahSaudara: 'Jumlah Saudara',
+  provinsi: 'Provinsi', kabupaten: 'Kabupaten / Kota',
+  kecamatan: 'Kecamatan', kelurahan: 'Kelurahan / Desa',
+  alamat: 'Alamat', rtRw: 'RT / RW', kodePos: 'Kode Pos',
+  noKip: 'No KIP', penerimaPkh: 'Penerima PKH', penerimaKjp: 'Penerima KJP',
+  // Riwayat Pendidikan
+  jenisSekolah: 'Jenis Sekolah', nisn: 'NISN', npsn: 'NPSN',
+  namaSekolah: 'Nama Sekolah', alamatSekolah: 'Alamat Sekolah',
+  lulusTahun: 'Tahun Lulus', lulusJalur: 'Jalur Kelulusan',
+  jurusan: 'Jurusan', kategoriUkt: 'Kategori UKT', nominalUkt: 'Nominal UKT',
+  nomorTes: 'Nomor Tes', fakultas: 'Fakultas', prodi: 'Program Studi',
+  // Prestasi
+  namaLomba: 'Nama Lomba', jenisLomba: 'Jenis Lomba',
+  tingkatLomba: 'Tingkat Lomba', predikatJuara: 'Predikat Juara',
+  jumlahJuzz: 'Jumlah Juzz',
+  // Keluarga
+  namaAyah: 'Nama Ayah', nikAyah: 'NIK Ayah', statusAyah: 'Status Ayah',
+  noTelpAyah: 'No Telp Ayah', pendidikanAyah: 'Pendidikan Ayah',
+  pekerjaanAyah: 'Pekerjaan Ayah', penghasilanAyah: 'Penghasilan Ayah',
+  namaIbu: 'Nama Ibu', nikIbu: 'NIK Ibu', statusIbu: 'Status Ibu',
+  noTelpIbu: 'No Telp Ibu', pendidikanIbu: 'Pendidikan Ibu',
+  pekerjaanIbu: 'Pekerjaan Ibu', penghasilanIbu: 'Penghasilan Ibu',
+  nomorKk: 'Nomor KK', jumlahTanggungan: 'Jumlah Tanggungan',
+  jumlahHutang: 'Jumlah Hutang', cicilanHutang: 'Cicilan Hutang',
+  jumlahPiutang: 'Jumlah Piutang', cicilanPiutang: 'Cicilan Piutang',
+  // Rumah
+  luasTanah: 'Luas Tanah', kepemilikanRumah: 'Kepemilikan Rumah',
+  biayaSewa: 'Biaya Sewa', tanahLain: 'Tanah Lain', statusTanahLain: 'Status Tanah Lain',
+  dayaListrik: 'Daya Listrik', statusListrik: 'Status Listrik',
+  biayaListrik1: 'Biaya Listrik (1)', biayaListrik2: 'Biaya Listrik (2)', biayaListrik3: 'Biaya Listrik (3)',
+  // Domisili
+  provinsiAyah: 'Provinsi Ayah', kabupatenAyah: 'Kabupaten Ayah',
+  kecamatanAyah: 'Kecamatan Ayah', kelurahanAyah: 'Kelurahan Ayah',
+  alamatAyah: 'Alamat Ayah', rtRwAyah: 'RT / RW Ayah', kodePosAyah: 'Kode Pos Ayah', gmapAyah: 'Google Maps Ayah',
+  provinsiIbu: 'Provinsi Ibu', kabupatenIbu: 'Kabupaten Ibu',
+  kecamatanIbu: 'Kecamatan Ibu', kelurahanIbu: 'Kelurahan Ibu',
+  alamatIbu: 'Alamat Ibu', rtRwIbu: 'RT / RW Ibu', kodePosIbu: 'Kode Pos Ibu', gmapIbu: 'Google Maps Ibu',
+  namaWali: 'Nama Wali', nikWali: 'NIK Wali', noTelpWali: 'No Telp Wali',
+  hubunganWali: 'Hubungan Wali', pendidikanWali: 'Pendidikan Wali',
+  pekerjaanWali: 'Pekerjaan Wali', penghasilanWali: 'Penghasilan Wali',
+  provinsiWali: 'Provinsi Wali', kabupatenWali: 'Kabupaten Wali',
+  kecamatanWali: 'Kecamatan Wali', kelurahanWali: 'Kelurahan Wali',
+  alamatWali: 'Alamat Wali', rtRwWali: 'RT / RW Wali', kodePosWali: 'Kode Pos Wali', gmapWali: 'Google Maps Wali',
+  // Kebutuhan Khusus
+  penyandangDisabilitas: 'Penyandang Disabilitas', jenisDisabilitas: 'Jenis Disabilitas',
+};
+
+function formatLabel(key: string): string {
+  return labelMap[key] || key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
+}
+
+function formatValue(key: string, value: any): string {
+  if (value === null || value === undefined || value === '') return '-';
+  if (key === 'penghasilanAyah' || key === 'penghasilanIbu' || key === 'penghasilanWali' ||
+      key === 'nominalUkt' || key === 'biayaSewa' || key === 'biayaListrik1' || key === 'biayaListrik2' || key === 'biayaListrik3' ||
+      key === 'jumlahHutang' || key === 'cicilanHutang' || key === 'jumlahPiutang' || key === 'cicilanPiutang') {
+    const n = Number(value);
+    if (n === 0) return 'Rp 0';
+    return 'Rp ' + n.toLocaleString('id-ID');
+  }
+  if (key === 'penerimaPkh' || key === 'penerimaKjp') {
+    return value === 1 || value === '1' ? 'Ya' : 'Tidak';
+  }
+  if (key === 'penyandangDisabilitas') {
+    return value === 1 || value === '1' ? 'Ya' : 'Tidak';
+  }
+  if (key === 'jenisKelamin') return value === 'L' ? 'Laki-laki' : value === 'P' ? 'Perempuan' : String(value);
+  return String(value);
+}
+---
+
+<AdminLayout title="Detail Profil" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="pendaftaran">
+  <div class="mb-6">
+    <a href="/admin/pendaftaran" class="inline-flex items-center gap-1 text-sm text-outline hover:text-on-surface-variant dark:hover:text-outline-variant mb-4">
+      <span class="material-symbols-outlined text-lg">arrow_back</span> Kembali
+    </a>
+    <h1 class="text-2xl font-extrabold text-on-surface">{mhs.namaLengkap}</h1>
+    <p class="text-outline mt-1">NIK: {mhs.nik || '-'} &middot; NIM: {mhs.nim || '-'}</p>
+  </div>
+
+  <!-- Status Card -->
+  <Card class="mb-6">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div class="flex items-center gap-3">
+        <span class:list={[
+          'px-3 py-1 text-sm rounded-full font-medium',
+          st.color === 'amber' && 'bg-secondary-container text-on-secondary-container',
+          st.color === 'blue' && 'bg-primary-container text-on-primary-container',
+          st.color === 'green' && 'bg-primary-container text-on-primary-container',
+          st.color === 'red' && 'bg-error-container text-on-error-container',
+        ]}>{st.label}</span>
+        <span class="text-sm text-outline">Step: {mhs.profileStep || 0}/7</span>
+        {mhs.profileSubmittedAt && (
+          <span class="text-sm text-outline">Submit: {new Date(mhs.profileSubmittedAt).toLocaleDateString('id-ID')}</span>
+        )}
+      </div>
+
+      {mhs.profileStatus === 'pending' && (
+        <div class="flex gap-3">
+          <button id="btn-verify" class="inline-flex items-center gap-2 bg-primary hover:opacity-90 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+            <span class="material-symbols-outlined text-lg">verified</span> Verifikasi
+          </button>
+          <button id="btn-reject" class="inline-flex items-center gap-2 bg-error hover:opacity-90 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+            <span class="material-symbols-outlined text-lg">cancel</span> Tolak
+          </button>
+        </div>
+      )}
+    </div>
+
+    {mhs.profileCatatan && (
+      <div class="mt-3 p-3 bg-error-container rounded-lg border border-outline-variant">
+        <p class="text-xs font-medium text-error">Catatan Admin:</p>
+        <p class="text-xs text-error mt-1">{mhs.profileCatatan}</p>
+      </div>
+    )}
+  </Card>
+
+  <!-- Sections -->
+  <div class="space-y-6 mb-8">
+    {sections.map((section) => (
+      <Card>
+        <h3 class="text-lg font-semibold text-on-surface mb-4">{section.title}</h3>
+        {section.data ? (
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(section.data)
+              .filter(([key]) => !['id', 'userId', 'createdAt', 'updatedAt'].includes(key))
+              .map(([key, value]) => (
+                <div class="text-sm">
+                  <span class="text-outline">{formatLabel(key)}:</span>
+                  <span class="ml-1 text-on-surface font-medium">{formatValue(key, value)}</span>
+                </div>
+              ))
+            }
+          </div>
+        ) : (
+          <p class="text-sm text-outline italic">Belum diisi</p>
+        )}
+      </Card>
+    ))}
+  </div>
+
+  <!-- Dokumen -->
+  {docs.length > 0 && (
+    <Card class="mb-8">
+      <h3 class="text-lg font-semibold text-on-surface mb-4">Dokumen ({docs.length})</h3>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {docs.map((d) => (
+          <div class="flex items-center gap-3 p-3 bg-surface bg-surface-container-lowest rounded-lg">
+            <span class="material-symbols-outlined text-outline-variant">description</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-xs font-medium text-on-surface truncate">{d.originalFilename || d.fieldName}</p>
+              <p class="text-[10px] text-outline">{d.fieldName} ({d.bagian})</p>
+            </div>
+            {d.r2Key && (
+              <a href={`https://drive.google.com/file/d/${d.r2Key}/view`} target="_blank"
+                class="text-primary hover:text-primary text-xs font-medium">Lihat</a>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  )}
+
+  <!-- Pendaftaran Beasiswa -->
+  {daftarList.length > 0 && (
+    <Card class="mb-8">
+      <h3 class="text-lg font-semibold text-on-surface mb-4">Pendaftaran Beasiswa ({daftarList.length})</h3>
+      <div class="space-y-3">
+        {daftarList.map((d) => (
+          <div class="flex items-center justify-between p-3 bg-surface bg-surface-container-lowest rounded-lg">
+            <div>
+              <p class="text-sm font-medium text-on-surface">{d.beasiswaNama}</p>
+              <p class="text-xs text-outline">Status: {d.status} | {new Date(d.createdAt).toLocaleDateString('id-ID')}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  )}
+
+  <div id="verify-status" class="hidden fixed bottom-4 right-4 z-50"></div>
+
+  <script define:vars={{ userId: mhs.id }}>
+    const statusEl = document.getElementById('verify-status');
+
+    async function doAction(action) {
+      const notes = action === 'reject' ? prompt('Catatan penolakan (opsional):') : null;
+      if (action === 'reject' && notes === null) return;
+
+      try {
+        const res = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, action, notes }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          statusEl.innerHTML = `<div class="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium bg-primary text-white">
+            <span class="material-symbols-outlined text-lg">check_circle</span> ${data.message}
+          </div>`;
+          statusEl.classList.remove('hidden');
+          setTimeout(() => window.location.reload(), 1500);
+        } else {
+          alert(data.message || 'Gagal');
+        }
+      } catch { alert('Terjadi kesalahan'); }
+    }
+
+    document.getElementById('btn-verify')?.addEventListener('click', () => doAction('verify'));
+    document.getElementById('btn-reject')?.addEventListener('click', () => doAction('reject'));
+  </script>
+</AdminLayout>

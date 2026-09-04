@@ -1,0 +1,218 @@
+---
+// path: src/pages/admin/index.astro
+import AdminLayout from "../../layouts/AdminLayout.astro";
+import Card from "../../components/ui/Card.astro";
+
+import { drizzle } from "drizzle-orm/d1";
+import { eq, sql } from "drizzle-orm";
+import * as schema from "../../db/schema";
+import { users } from "../../db/schema";
+import { verifyGardaToken } from "../../lib/auth";
+
+// GARDA SSO
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+
+// ── Count via SQL aggregation (bukan fetch-all ke JS) ──
+const countRow = await db
+  .select({
+    pending: sql<number>`SUM(CASE WHEN ${users.profileStatus} = 'pending' THEN 1 ELSE 0 END)`,
+    verified: sql<number>`SUM(CASE WHEN ${users.profileStatus} = 'verified' THEN 1 ELSE 0 END)`,
+    rejected: sql<number>`SUM(CASE WHEN ${users.profileStatus} = 'rejected' THEN 1 ELSE 0 END)`,
+  })
+  .from(users)
+  .where(eq(users.role, "mahasiswa"));
+const pending = Number(countRow[0]?.pending || 0);
+const verified = Number(countRow[0]?.verified || 0);
+const rejected = Number(countRow[0]?.rejected || 0);
+const total = pending + verified + rejected;
+
+const stats = [
+  { label: "Semua", value: total, icon: "group", color: "blue" },
+  {
+    label: "Menunggu Verifikasi",
+    value: pending,
+    icon: "pending",
+    color: "blue",
+  },
+  { label: "Terverifikasi", value: verified, icon: "verified", color: "green" },
+  { label: "Ditolak", value: rejected, icon: "cancel", color: "red" },
+];
+---
+
+<AdminLayout
+  title="Dashboard"
+  namaUser={admin.namaLengkap}
+  userRole={admin.role}
+  activeMenu="dashboard"
+>
+  <div class="mb-8">
+    <h1 class="text-2xl font-extrabold text-on-surface">Dashboard Admin</h1>
+    <p class="text-outline mt-1">Ringkasan profil mahasiswa</p>
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    {
+      stats.map((s) => (
+        <Card class="p-2">
+          <div class="flex items-center gap-3">
+            <div
+              class:list={[
+                "w-10 h-10 rounded-lg flex items-center justify-center",
+                s.color === "blue" && "bg-primary/10",
+                s.color === "amber" && "bg-secondary/10",
+                s.color === "green" && "bg-primary/10",
+                s.color === "red" && "bg-error/10",
+              ]}
+            >
+              <span
+                class:list={[
+                  "material-symbols-outlined text-xl",
+                  s.color === "blue" && "text-primary",
+                  s.color === "amber" && "text-secondary",
+                  s.color === "green" && "text-primary",
+                  s.color === "red" && "text-error",
+                ]}
+              >
+                {s.icon}
+              </span>
+            </div>
+            <div>
+              <p class="text-2xl font-extrabold text-on-surface">{s.value}</p>
+              <p class="text-xs text-outline">{s.label}</p>
+            </div>
+          </div>
+        </Card>
+      ))
+    }
+  </div>
+
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {
+      ["admin", "superadmin"].includes(admin.role) && (
+        <a
+          href="/admin/pendaftaran"
+          class="group bg-surface-container-lowest rounded-xl border border-outline-variant p-5 hover:border-primary hover:shadow-md transition"
+        >
+          <div class="w-10 h-10 bg-primary/30 rounded-lg flex items-center justify-center mb-3">
+            <span class="material-symbols-outlined text-primary text-xl">
+              group
+            </span>
+          </div>
+          <h3 class="font-semibold text-on-surface">Profil Mahasiswa</h3>
+          <p class="text-xs text-outline mt-1">
+            Verifikasi data profil mahasiswa
+          </p>
+        </a>
+      )
+    }
+    {
+      ["admin", "superadmin"].includes(admin.role) && (
+        <a
+          href="/admin/pendaftaran-beasiswa"
+          class="group bg-surface-container-lowest rounded-xl border border-outline-variant p-5 hover:border-primary hover:border-primary hover:shadow-md transition"
+        >
+          <div class="w-10 h-10 bg-primary/30 rounded-lg flex items-center justify-center mb-3">
+            <span class="material-symbols-outlined text-primary text-xl">
+              how_to_reg
+            </span>
+          </div>
+          <h3 class="font-semibold text-on-surface">Pendaftar Beasiswa</h3>
+          <p class="text-xs text-outline mt-1">
+            Kelola status kelulusan pendaftar
+          </p>
+        </a>
+      )
+    }
+    {
+      ["editor", "superadmin"].includes(admin.role) && (
+        <a
+          href="/admin/blog"
+          class="group bg-surface-container-lowest rounded-xl border border-outline-variant p-5 hover:border-tertiary hover:border-tertiary hover:shadow-md transition"
+        >
+          <div class="w-10 h-10 bg-tertiary/30 rounded-lg flex items-center justify-center mb-3">
+            <span class="material-symbols-outlined text-tertiary text-xl">
+              article
+            </span>
+          </div>
+          <h3 class="font-semibold text-on-surface">Blog / Berita</h3>
+          <p class="text-xs text-outline mt-1">Kelola artikel dan pengumuman</p>
+        </a>
+      )
+    }
+    {
+      admin.role === "superadmin" && (
+        <a
+          href="/admin/beasiswa"
+          class="group bg-surface-container-lowest rounded-xl border border-outline-variant p-5 hover:border-secondary hover:border-secondary hover:shadow-md transition"
+        >
+          <div class="w-10 h-10 bg-secondary/30 rounded-lg flex items-center justify-center mb-3">
+            <span class="material-symbols-outlined text-secondary text-xl">
+              workspace_premium
+            </span>
+          </div>
+          <h3 class="font-semibold text-on-surface">Kelola Beasiswa</h3>
+          <p class="text-xs text-outline mt-1">
+            Tambah dan atur jenis beasiswa
+          </p>
+        </a>
+      )
+    }
+    {
+      admin.role === "superadmin" && (
+        <a
+          href="/admin/pengumuman"
+          class="group bg-surface-container-lowest rounded-xl border border-outline-variant p-5 hover:border-tertiary hover:border-tertiary hover:shadow-md transition"
+        >
+          <div class="w-10 h-10 bg-tertiary/30 rounded-lg flex items-center justify-center mb-3">
+            <span class="material-symbols-outlined text-tertiary text-xl">
+              campaign
+            </span>
+          </div>
+          <h3 class="font-semibold text-on-surface">Rilis Pengumuman</h3>
+          <p class="text-xs text-outline mt-1">
+            Terbitkan pengumuman hasil seleksi + SK
+          </p>
+        </a>
+      )
+    }
+    {
+      admin.role === "superadmin" && (
+        <a
+          href="/admin/pengaturan"
+          class="group bg-surface-container-lowest rounded-xl border border-outline-variant p-5 hover:border-outline hover:border-outline hover:shadow-md transition"
+        >
+          <div class="w-10 h-10 bg-surface-container-high rounded-lg flex items-center justify-center mb-3">
+            <span class="material-symbols-outlined text-on-surface-variant text-outline text-xl">
+              settings
+            </span>
+          </div>
+          <h3 class="font-semibold text-on-surface">Pengaturan</h3>
+          <p class="text-xs text-outline mt-1">Kelola akun admin</p>
+        </a>
+      )
+    }
+    {
+      ["admin", "superadmin"].includes(admin.role) && (
+        <a
+          href="/admin/export"
+          class="group bg-surface-container-lowest rounded-xl border border-outline-variant p-5 hover:border-primary hover:border-primary hover:shadow-md transition"
+        >
+          <div class="w-10 h-10 bg-primary/30 rounded-lg flex items-center justify-center mb-3">
+            <span class="material-symbols-outlined text-primary text-xl">
+              download
+            </span>
+          </div>
+          <h3 class="font-semibold text-on-surface">Export Data</h3>
+          <p class="text-xs text-outline mt-1">Download data mahasiswa CSV</p>
+        </a>
+      )
+    }
+  </div>
+</AdminLayout>

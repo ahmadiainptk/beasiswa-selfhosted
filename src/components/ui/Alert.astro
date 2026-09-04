@@ -1,0 +1,48 @@
+---
+// path: src/components/ui/Alert.astro
+interface Props {
+  type?: 'success' | 'error' | 'warning' | 'info';
+  message: string;
+  class?: string;
+}
+
+const { type = 'info', message, class: className = '' } = Astro.props;
+
+const config = {
+  success: {
+    bg: 'bg-green-50 dark:bg-green-900/20',
+    border: 'border-green-200 dark:border-green-800',
+    text: 'text-green-700 dark:text-green-400',
+    icon: 'check_circle',
+  },
+  error: {
+    bg: 'bg-red-50 dark:bg-red-900/20',
+    border: 'border-red-200 dark:border-red-800',
+    text: 'text-red-700 dark:text-red-400',
+    icon: 'error',
+  },
+  warning: {
+    bg: 'bg-yellow-50 dark:bg-yellow-900/20',
+    border: 'border-yellow-200 dark:border-yellow-800',
+    text: 'text-yellow-700 dark:text-yellow-400',
+    icon: 'warning',
+  },
+  info: {
+    bg: 'bg-blue-50 dark:bg-blue-900/20',
+    border: 'border-blue-200 dark:border-blue-800',
+    text: 'text-blue-700 dark:text-blue-400',
+    icon: 'info',
+  },
+};
+
+const c = config[type];
+---
+
+<div class:list={[
+  'p-3 rounded-lg border text-sm flex items-center gap-2',
+  c.bg, c.border, c.text,
+  className,
+]}>
+  <span class="material-symbols-outlined text-lg">{c.icon}</span>
+  {message}
+</div>

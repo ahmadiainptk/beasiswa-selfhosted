@@ -1,0 +1,335 @@
+---
+// path: src/pages/mahasiswa/index.astro
+import MahasiswaLayout from '../../layouts/MahasiswaLayout.astro';
+import Card from '../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq, and } from 'drizzle-orm';
+import * as schema from '../../db/schema';
+import { sessions, users, pendaftaran, beasiswa as beasiswaTable } from '../../db/schema';
+import { getCookieName } from '../../lib/auth';
+import { getRilisBeasiswaIds } from '../../lib/pengumuman';
+
+// Auth check
+const token = Astro.cookies.get(getCookieName())?.value;
+if (!token || !Astro.locals.runtime.env?.DB) {
+  return Astro.redirect('/login');
+}
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+// Get user from session
+const session = await db.select()
+  .from(sessions)
+  .innerJoin(users, eq(sessions.userId, users.id))
+  .where(eq(sessions.token, token))
+  .limit(1);
+
+if (session.length === 0 || new Date(session[0].sessions.expiresAt) < new Date()) {
+  return Astro.redirect('/login');
+}
+
+const user = session[0].users;
+
+// Get all pendaftaran for this user (with beasiswa info)
+const daftarList = await db.select({
+  id: pendaftaran.id,
+  status: pendaftaran.status,
+  catatanAdmin: pendaftaran.catatanAdmin,
+  createdAt: pendaftaran.createdAt,
+  beasiswaId: pendaftaran.beasiswaId,
+  beasiswaNama: beasiswaTable.nama,
+  beasiswaSlug: beasiswaTable.slug,
+  format1FileId: pendaftaran.format1FileId,
+  lampiran2FileId: pendaftaran.lampiran2FileId,
+}).from(pendaftaran)
+  .innerJoin(beasiswaTable, eq(pendaftaran.beasiswaId, beasiswaTable.id))
+  .where(eq(pendaftaran.userId, user.id));
+
+// Flag pengumuman dirilis per beasiswa (status lolos/gagal cuma boleh lihat kalau sudah rilis)
+const rilisSet = await getRilisBeasiswaIds(db, daftarList.map(d => d.beasiswaId));
+const daftarWithRilis = daftarList.map(d => ({ ...d, rilis: rilisSet.has(d.beasiswaId) }));
+
+// Get available beasiswa (active, not yet registered)
+const registeredIds = daftarList.map(d => d.beasiswaId);
+const allActive = await db.select().from(beasiswaTable)
+  .where(eq(beasiswaTable.aktif, 1));
+
+const now = new Date();
+const available = allActive.filter(b => {
+  if (registeredIds.includes(b.id)) return false;
+  if (b.ditutupPada && new Date(b.ditutupPada) < now) return false;
+  return true;
+});
+
+// Profile status config
+const profileConfig: Record<string, { label: string; color: string; icon: string; desc: string }> = {
+  incomplete: { label: 'Belum Lengkap', color: 'amber', icon: 'edit_note', desc: 'Lengkapi data profil Anda untuk dapat mendaftar beasiswa.' },
+  pending: { label: 'Menunggu Verifikasi', color: 'blue', icon: 'pending', desc: 'Profil Anda sedang diverifikasi oleh admin. Anda sudah bisa mendaftar beasiswa.' },
+  verified: { label: 'Terverifikasi', color: 'green', icon: 'verified', desc: 'Profil Anda sudah terverifikasi. Silakan pilih beasiswa yang tersedia.' },
+  rejected: { label: 'Ditolak', color: 'red', icon: 'cancel', desc: 'Profil Anda ditolak. Silakan perbaiki data dan submit ulang.' },
+};
+
+const pStatus = profileConfig[user.profileStatus] || profileConfig.incomplete;
+
+export const pendaftaranStatus: Record<string, { label: string; color: string; icon: string }> = {
+  pending: { label: 'Menunggu', color: 'blue', icon: 'pending' },
+  accepted: { label: 'Lolos', color: 'green', icon: 'verified' },
+  rejected: { label: 'Tidak Lolos', color: 'red', icon: 'cancel' },
+  rilis: { label: 'Menunggu Pengumuman', color: 'blue', icon: 'schedule' },
+};
+
+// Status lolos/gagal hanya boleh terlihat KALAU pengumuman beasiswa itu SUDAH dirilis.
+// Belum rilis → tampil "Menunggu Pengumuman" (status & catatan admin disembunyikan).
+function resolveDisplayStatus(rawStatus: string, rilis: boolean) {
+  if (!rilis) return 'rilis';
+  return rawStatus;
+}
+
+const steps = [
+  { num: 1, label: 'Identitas Pribadi', icon: 'person' },
+  { num: 2, label: 'Riwayat Pendidikan', icon: 'school' },
+  { num: 3, label: 'Prestasi & Tahfidz', icon: 'emoji_events' },
+  { num: 4, label: 'Identitas Keluarga', icon: 'family_restroom' },
+  { num: 5, label: 'Kondisi Rumah', icon: 'home' },
+  { num: 6, label: 'Domisili Ortu/Wali', icon: 'location_on' },
+];
+---
+
+<MahasiswaLayout title="Dashboard" namaUser={user.namaLengkap}>
+  <!-- Welcome -->
+  <div class="mb-8">
+    <h1 class="text-2xl font-extrabold text-on-surface">
+      Selamat Datang, {user.namaLengkap}!
+    </h1>
+    <p class="text-outline mt-1">
+      Dashboard Pendaftaran Beasiswa
+    </p>
+  </div>
+
+  <!-- Pengecekan Desil DTSEN — petunjuk wajib sebelum melengkapi formulir -->
+  <div class="mb-8">
+    <div class="flex items-start gap-3 p-4 rounded-xl border border-primary/30 bg-primary-container/20">
+      <span class="material-symbols-outlined text-primary shrink-0 mt-0.5">info</span>
+      <div class="flex-1 space-y-1">
+        <p class="text-sm font-semibold text-on-surface">
+          Cek Desil DTSEN Sebelum Melengkapi Formulir
+        </p>
+        <p class="text-xs text-on-surface-variant">
+          Desil DTSEN menjadi salah satu dasar <span class="font-medium">verifikasi kebenaran data</span> dan
+          <span class="font-medium">kelayakan penerimaan beasiswa</span>. Sebelum mengisi formulir, silakan:
+        </p>
+        <ol class="list-decimal list-inside text-xs text-on-surface-variant space-y-0.5 mt-1">
+          <li>
+            Lakukan pengecekan desil di
+            <a
+              href="https://dtsen-form.bps.go.id/indonesia-pintar"
+              target="_blank"
+              rel="noopener"
+              class="text-primary underline font-medium hover:opacity-80"
+            >dtsen-form.bps.go.id/indonesia-pintar</a>.
+          </li>
+          <li>
+            Jika terdapat <span class="font-medium">kesalahan data</span> pada data Anda di BPS,
+            lakukan <span class="font-medium">pembaruan data</span> (update) melalui menu yang tersedia di halaman tersebut.
+          </li>
+          <li>
+            Pastikan data yang Anda isi pada formulir ini sesuai dengan data terbaru di DTSEN.
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- Profile Status (always shown) -->
+  <Card class="mb-8">
+    <div class="flex items-start gap-4">
+      <div class:list={[
+        'w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0',
+        pStatus.color === 'amber' && 'bg-secondary-container',
+        pStatus.color === 'blue' && 'bg-primary-container',
+        pStatus.color === 'green' && 'bg-primary-container',
+        pStatus.color === 'red' && 'bg-error-container',
+      ]}>
+        <span class:list={[
+          'material-symbols-outlined text-3xl',
+          pStatus.color === 'amber' && 'text-secondary',
+          pStatus.color === 'blue' && 'text-primary',
+          pStatus.color === 'green' && 'text-primary',
+          pStatus.color === 'red' && 'text-error',
+        ]}>{pStatus.icon}</span>
+      </div>
+      <div class="flex-1">
+        <div class="flex items-center gap-3 mb-1">
+          <h2 class="text-lg font-bold text-on-surface">Status Profil</h2>
+          <span class:list={[
+            'px-2.5 py-0.5 text-xs rounded-full font-medium',
+            pStatus.color === 'amber' && 'bg-secondary-container text-on-secondary-container',
+            pStatus.color === 'blue' && 'bg-primary-container text-on-primary-container',
+            pStatus.color === 'green' && 'bg-primary-container text-on-primary-container',
+            pStatus.color === 'red' && 'bg-error-container text-on-error-container',
+          ]}>{pStatus.label}</span>
+        </div>
+        <p class="text-sm text-outline">{pStatus.desc}</p>
+
+        {user.profileStatus === 'rejected' && user.profileCatatan && (
+          <div class="mt-3 p-3 bg-error-container rounded-lg border border-red-200 dark:border-red-800">
+            <p class="text-xs font-medium text-error">Catatan Admin:</p>
+            <p class="text-xs text-error mt-1">{user.profileCatatan}</p>
+          </div>
+        )}
+
+        <!-- Progress bar (always show) -->
+        <div class="mt-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs text-outline">Progres Pengisian</span>
+            <span class="text-xs font-medium text-on-surface-variant">{user.profileStep || 0}/7</span>
+          </div>
+          <div class="w-full bg-surface-container-high rounded-full h-2">
+            <div class="bg-primary h-2 rounded-full transition-all" style={`width: ${((user.profileStep || 0) / 7) * 100}%`}></div>
+          </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="mt-4 flex flex-wrap gap-3">
+          {(user.profileStatus === 'incomplete' || user.profileStatus === 'rejected') && (
+            <a href={`/mahasiswa/form/${user.profileStep || 1}`}
+              class="inline-flex items-center gap-2 bg-primary hover:bg-primary text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+              <span class="material-symbols-outlined text-lg">play_arrow</span>
+              {user.profileStatus === 'rejected' ? 'Perbaiki Profil' : 'Lanjutkan (Step ' + (user.profileStep || 1) + ')'}
+            </a>
+          )}
+          <a href="/mahasiswa/form/review"
+            class="inline-flex items-center gap-2 bg-surface-container-high hover:bg-surface-container-high hover:bg-surface-container-high text-on-surface-variant font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+            <span class="material-symbols-outlined text-lg">rate_review</span>
+            Review Profil
+          </a>
+          {user.profileStatus === 'verified' && (
+            <a href="/api/pendaftaran/formulir-pdf"
+              class="inline-flex items-center gap-2 bg-primary hover:bg-primary text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+              <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
+              Download Formulir (PDF)
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  </Card>
+
+  <!-- Daftar Pendaftaran Beasiswa -->
+  {daftarList.length > 0 && (
+    <div class="mb-8">
+      <h2 class="text-lg font-bold text-on-surface mb-4">Pendaftaran Beasiswa Saya</h2>
+      <div class="space-y-4">
+        {daftarWithRilis.map((d) => {
+          const displayStatus = resolveDisplayStatus(d.status, d.rilis);
+          const s = pendaftaranStatus[displayStatus] || { label: displayStatus, color: 'slate', icon: 'description' };
+          return (
+            <Card>
+              <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-4">
+                  <div class:list={[
+                    'w-12 h-12 rounded-xl flex items-center justify-center',
+                    s.color === 'blue' && 'bg-primary-container',
+                    s.color === 'green' && 'bg-primary-container',
+                    s.color === 'red' && 'bg-error-container',
+                  ]}>
+                    <span class:list={[
+                      'material-symbols-outlined text-2xl',
+                      s.color === 'blue' && 'text-primary',
+                      s.color === 'green' && 'text-primary',
+                      s.color === 'red' && 'text-error',
+                    ]}>{s.icon}</span>
+                  </div>
+                  <div>
+                    <p class="text-sm font-semibold text-on-surface">{d.beasiswaNama}</p>
+                    <p class:list={[
+                      'text-sm font-medium',
+                      s.color === 'blue' && 'text-primary',
+                      s.color === 'green' && 'text-primary text-on-primary-container',
+                      s.color === 'red' && 'text-error',
+                    ]}>{s.label}</p>
+                    {!d.rilis && (
+                      <p class="text-xs text-outline mt-0.5">Hasil seleksi akan ditampilkan setelah pengumuman dirilis.</p>
+                    )}
+                    {d.rilis && d.status === 'accepted' && (
+                      <p class="text-xs mt-0.5">
+                        <span class={d.format1FileId && d.lampiran2FileId ? 'text-green-600' : 'text-secondary'}>
+                          {d.format1FileId && d.lampiran2FileId
+                            ? '✓ Berkas kelulusan lengkap'
+                            : '⚠ Lengkapi berkas kelulusan (Format 1 & Lampiran II)'}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-3">
+                  <a href={`/mahasiswa/daftar/${d.beasiswaSlug}`}
+                    class="inline-flex items-center gap-2 bg-surface-container-high hover:bg-surface-container-high hover:bg-surface-container-high text-on-surface-variant font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+                    <span class="material-symbols-outlined text-lg">visibility</span>
+                    Detail
+                  </a>
+                  <span class="text-xs text-outline-variant dark:text-outline">
+                    {new Date(d.createdAt).toLocaleDateString('id-ID')}
+                  </span>
+                </div>
+              </div>
+
+              {d.rilis && d.status === 'rejected' && d.catatanAdmin && (
+                <div class="mt-3 p-3 bg-error-container rounded-lg border border-red-200 dark:border-red-800">
+                  <p class="text-xs font-medium text-error">Catatan Admin:</p>
+                  <p class="text-xs text-error mt-1">{d.catatanAdmin}</p>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  )}
+
+  <!-- Available Beasiswa (only if profile is ready) -->
+  {available.length > 0 && (user.profileStatus === 'verified' || user.profileStatus === 'pending') && (
+    <div class="mb-8">
+      <h2 class="text-lg font-bold text-on-surface mb-4">Beasiswa Tersedia</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {available.map((b) => (
+          <a href={`/mahasiswa/daftar/${b.slug}`}
+            class="block bg-surface-container-lowest rounded-xl p-5 border border-outline-variant hover:border-primary hover:shadow-md transition group">
+            <div class="flex items-start gap-3">
+              <div class="w-10 h-10 rounded-lg bg-primary-container flex items-center justify-center flex-shrink-0">
+                <span class="material-symbols-outlined text-primary text-xl">school</span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <h3 class="text-sm font-semibold text-on-surface group-hover:text-primary transition">
+                  {b.nama}
+                </h3>
+                {b.deskripsi && (
+                  <p class="text-xs text-outline mt-1 line-clamp-2">{b.deskripsi}</p>
+                )}
+                <div class="flex gap-3 mt-2 text-xs text-outline-variant">
+                  {b.ditutupPada && (
+                    <span>Tutup: {new Date(b.ditutupPada).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                  )}
+                </div>
+              </div>
+              <span class="material-symbols-outlined text-outline-variant group-hover:text-primary transition">arrow_forward</span>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  )}
+
+  <!-- Empty state -->
+  {daftarList.length === 0 && available.length === 0 && (
+    <Card>
+      <div class="text-center py-12">
+        <span class="material-symbols-outlined text-6xl text-outline-variant dark:text-on-surface-variant mb-4">school</span>
+        <h3 class="text-lg font-semibold text-on-surface-variant">Belum Ada Beasiswa</h3>
+        <p class="text-outline mt-1">Saat ini belum ada beasiswa yang tersedia untuk pendaftaran.</p>
+      </div>
+    </Card>
+  )}
+</MahasiswaLayout>

@@ -1,0 +1,105 @@
+---
+import PublicLayout from '../layouts/PublicLayout.astro';
+---
+
+<PublicLayout title="Masuk">
+  <div class="min-h-[70vh] flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+      <!-- Card -->
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-outline-variant p-6 sm:p-8">
+        <!-- Header -->
+        <div class="text-center mb-6">
+          <div class="w-14 h-14 bg-primary rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+            <span class="material-symbols-outlined text-on-primary text-2xl">login</span>
+          </div>
+          <h1 class="text-xl font-extrabold font-[Montserrat] text-on-surface tracking-tight">Masuk</h1>
+          <p class="text-sm text-on-surface-variant mt-1">Masuk menggunakan NIM dan NIK</p>
+        </div>
+
+        <!-- Error Message -->
+        <div id="error-msg" class="hidden mb-5 p-3 rounded-lg bg-error-container border border-red-200 dark:border-red-800 text-on-error-container text-sm flex items-center gap-2">
+          <span class="material-symbols-outlined text-lg">error</span>
+          <span id="error-text"></span>
+        </div>
+
+        <!-- Form -->
+        <form id="login-form" class="space-y-4">
+          <div>
+            <label for="nim" class="block text-sm font-semibold tracking-wider text-on-surface-variant mb-1.5">NIM</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-xl">badge</span>
+              <input type="text" id="nim" name="nim" required autofocus maxlength="8" inputmode="numeric" pattern="\d{8}" placeholder="8 digit NIM"
+                class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-outline-variant bg-white dark:bg-slate-900 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" />
+            </div>
+          </div>
+
+          <div>
+            <label for="nik" class="block text-sm font-semibold tracking-wider text-on-surface-variant mb-1.5">NIK</label>
+            <div class="relative">
+              <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-xl">person</span>
+              <input type="password" id="nik" name="nik" required maxlength="16" inputmode="numeric" pattern="\d{16}" placeholder="16 digit NIK KTP"
+                class="w-full pl-10 pr-4 py-2.5 rounded-lg border border-outline-variant bg-white dark:bg-slate-900 text-on-surface text-sm focus:ring-2 focus:ring-primary focus:border-primary outline-none transition" />
+            </div>
+          </div>
+
+          <button type="submit" id="submit-btn"
+            class="w-full py-2.5 bg-primary hover:opacity-90 text-on-primary font-semibold rounded-lg shadow-md transition-all flex items-center justify-center gap-2">
+            <span class="material-symbols-outlined text-xl">login</span>
+            Masuk
+          </button>
+        </form>
+
+        <!-- Login note -->
+        <p class="text-center text-sm text-on-surface-variant mt-5">
+          Akun dibuat oleh admin / sudah terdaftar di database kampus.
+        </p>
+      </div>
+    </div>
+  </div>
+</PublicLayout>
+
+<script>
+  const form = document.getElementById('login-form') as HTMLFormElement;
+  const errorMsg = document.getElementById('error-msg')!;
+  const errorText = document.getElementById('error-text')!;
+  const submitBtn = document.getElementById('submit-btn') as HTMLButtonElement;
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorMsg.classList.add('hidden');
+
+    const nimInput = document.getElementById('nim') as HTMLInputElement;
+    const nikInput = document.getElementById('nik') as HTMLInputElement;
+    if (nimInput.value.length !== 8) {
+      errorText.textContent = 'NIM harus 8 digit';
+      errorMsg.classList.remove('hidden');
+      return;
+    }
+    if (nikInput.value.length !== 16) {
+      errorText.textContent = 'NIK harus 16 digit';
+      errorMsg.classList.remove('hidden');
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Masuk...';
+
+    try {
+      const formData = new FormData(form);
+      const response = await fetch('/api/auth/login', { method: 'POST', body: formData });
+      const data = await response.json();
+      if (data.success) {
+        window.location.href = data.redirect;
+      } else {
+        errorText.textContent = data.error || 'Terjadi kesalahan';
+        errorMsg.classList.remove('hidden');
+      }
+    } catch (err) {
+      errorText.textContent = 'Terjadi kesalahan jaringan';
+      errorMsg.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<span class="material-symbols-outlined text-xl">login</span> Masuk';
+    }
+  });
+</script>

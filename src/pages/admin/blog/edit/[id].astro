@@ -1,0 +1,250 @@
+---
+// path: src/pages/admin/blog/edit/[id].astro
+import AdminLayout from '../../../../layouts/AdminLayout.astro';
+import Card from '../../../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import * as schema from '../../../../db/schema';
+import { blogPosts, blogCategories, blogTags, blogPostTags } from '../../../../db/schema';
+import { verifyGardaToken } from "../../../../lib/auth";
+
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+const id = parseInt(Astro.params.id || '0');
+if (!id) return Astro.redirect('/admin/blog');
+
+const rows = await db.select().from(blogPosts).where(eq(blogPosts.id, id)).limit(1);
+if (rows.length === 0) return Astro.redirect('/admin/blog');
+const post = rows[0];
+
+// Get tags
+const tagRows = await db.select({ name: blogTags.name })
+  .from(blogPostTags).innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
+  .where(eq(blogPostTags.postId, id));
+const currentTags = tagRows.map(r => r.name).join(', ');
+
+let categories: any[] = [];
+try { categories = await db.select().from(blogCategories).orderBy(blogCategories.name); } catch (e) {}
+
+const docUrl = post.docId ? `https://docs.google.com/document/d/${post.docId}/edit` : '';
+---
+
+<AdminLayout title="Edit Post" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="blog">
+  <div class="mb-6">
+    <a href="/admin/blog" class="inline-flex items-center gap-1 text-sm text-outline hover:text-on-surface-variant dark:hover:text-outline-variant mb-4">
+      <span class="material-symbols-outlined text-lg">arrow_back</span> Kembali
+    </a>
+    <h1 class="text-2xl font-extrabold text-on-surface">Edit: {post.title}</h1>
+    <p class="text-outline mt-1">
+      Status: <span class:list={['font-medium', post.status === 'published' ? 'text-primary' : 'text-secondary']}>{post.status === 'published' ? 'Published' : 'Draft'}</span>
+    </p>
+  </div>
+
+  <!-- Google Doc Link -->
+  {docUrl && (
+    <Card class="mb-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary text-2xl">description</span>
+          <div>
+            <p class="font-medium text-on-surface">Google Docs</p>
+            <p class="text-xs text-outline">Edit artikel di Google Docs</p>
+          </div>
+        </div>
+        <a href={docUrl} target="_blank" class="inline-flex items-center gap-2 bg-primary hover:bg-primary text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+          <span class="material-symbols-outlined text-lg">open_in_new</span>
+          Buka Editor
+        </a>
+      </div>
+    </Card>
+  )}
+
+  <!-- Metadata Form -->
+  <Card>
+    <form id="edit-form" class="space-y-5">
+      <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Judul</label>
+        <input type="text" name="title" value={post.title} required
+          class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Slug</label>
+        <input type="text" name="slug" value={post.slug}
+          class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Kategori</label>
+        <select name="category_id" class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none">
+          <option value="">Tanpa Kategori</option>
+          {categories.map((cat) => (
+            <option value={cat.id} selected={post.categoryId === cat.id}>{cat.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Tag</label>
+        <input type="text" name="tags" value={currentTags} placeholder="Gunakan koma untuk memisahkan tag"
+          class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Ringkasan</label>
+        <textarea name="excerpt" rows="2" placeholder="Ringkasan singkat..."
+          class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none">{post.excerpt || ''}</textarea>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Gambar Sampul</label>
+        <div class="flex items-center gap-3">
+          <input type="file" id="cover-file" accept="image/*" class="hidden" />
+          <button type="button" id="cover-upload-btn" class="px-3 py-2 text-sm border border-outline-variant rounded-lg hover:bg-surface-container-high transition flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">upload</span> Upload
+          </button>
+          <span id="cover-preview" class="text-xs text-outline">{post.coverImage ? '✓ Ada gambar' : ''}</span>
+          <span id="cover-spinner" style="display:none" class="material-symbols-outlined text-sm animate-spin text-primary">progress_activity</span>
+        </div>
+        <p class="text-xs text-outline-variant mt-1">Atau isi URL manual di bawah</p>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">URL Gambar (Manual)</label>
+        <input type="url" name="cover_image" id="cover-url" value={post.coverImage || ''} placeholder="https://..."
+          class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none" />
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-on-surface-variant mb-1">Status</label>
+        <select name="status" class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none">
+          <option value="draft" selected={post.status === 'draft'}>Draft</option>
+          <option value="published" selected={post.status === 'published'}>Published</option>
+        </select>
+        {post.status === 'published' && <p class="text-xs text-outline-variant mt-1">Konten HTML dari Google Docs sudah disimpan saat publish.</p>}
+      </div>
+
+      <div class="flex items-center justify-between pt-2">
+        <div id="form-message" class="text-sm"></div>
+        <div class="flex gap-3">
+          <button type="button" id="btn-delete" class="inline-flex items-center gap-2 bg-error hover:opacity-90 text-white font-medium px-4 py-2.5 rounded-lg text-sm transition-colors">
+            <span class="material-symbols-outlined text-lg">delete</span> Hapus
+          </button>
+          <button type="submit" class="inline-flex items-center gap-2 bg-primary hover:bg-primary text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+            <span class="material-symbols-outlined text-lg">save</span>
+            Simpan
+          </button>
+        </div>
+      </div>
+    </form>
+  </Card>
+
+  <Fragment set:html={`<script>
+    var postId = ${post.id};
+    var form = document.getElementById('edit-form');
+    var msg = document.getElementById('form-message');
+    var coverFile = document.getElementById('cover-file');
+    var coverBtn = document.getElementById('cover-upload-btn');
+    var coverUrl = document.getElementById('cover-url');
+    var coverPreview = document.getElementById('cover-preview');
+    var coverSpinner = document.getElementById('cover-spinner');
+
+    coverBtn.addEventListener('click', function() { coverFile.click(); });
+    coverFile.addEventListener('change', async function() {
+      var file = coverFile.files[0];
+      if (!file) return;
+      coverBtn.disabled = true;
+      coverSpinner.style.display = 'inline-block';
+      coverPreview.textContent = 'Mengkompresi...';
+
+      try {
+        var compressed = file;
+        if (file.type.startsWith('image/')) {
+          var bitmap = await createImageBitmap(file);
+          var w = Math.min(bitmap.width, 1200);
+          var h = Math.round((w / bitmap.width) * bitmap.height);
+          var canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          var ctx = canvas.getContext('2d');
+          ctx.drawImage(bitmap, 0, 0, w, h);
+          bitmap.close();
+          var blob = await new Promise(function(r) { canvas.toBlob(r, 'image/jpeg', 0.8); });
+          compressed = new File([blob], 'blog_' + Date.now() + '.jpg', { type: 'image/jpeg' });
+        }
+
+        coverPreview.textContent = 'Mengupload...';
+        var fd2 = new FormData();
+        fd2.append('file', compressed, compressed.name);
+        var upRes = await fetch('/api/admin/upload-cover', { method: 'POST', body: fd2 });
+        var upData = await upRes.json();
+        if (upData.success) {
+          coverUrl.value = upData.url;
+          coverPreview.textContent = 'OK ' + file.name;
+          coverPreview.className = 'text-xs text-primary';
+        } else {
+          coverPreview.textContent = 'Gagal: ' + (upData.message || 'Error');
+          coverPreview.className = 'text-xs text-error';
+        }
+      } catch(err) {
+        coverPreview.textContent = 'Error';
+        coverPreview.className = 'text-xs text-error';
+      }
+      coverSpinner.style.display = 'none';
+      coverBtn.disabled = false;
+    });
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      var fd = new FormData(form);
+      msg.innerHTML = '<span class="text-primary">Menyimpan...</span>';
+
+      try {
+        var res = await fetch('/api/admin/blog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'update',
+            id: postId,
+            title: fd.get('title'),
+            slug: fd.get('slug') || undefined,
+            excerpt: fd.get('excerpt') || undefined,
+            cover_image: fd.get('cover_image') || undefined,
+            category_id: fd.get('category_id') || undefined,
+            tags: fd.get('tags') || undefined,
+            status: fd.get('status'),
+          }),
+        });
+        var data = await res.json();
+        if (data.success) {
+          msg.innerHTML = '<span class="text-primary">Tersimpan!</span>';
+          setTimeout(function() { window.location.reload(); }, 800);
+        } else {
+          msg.innerHTML = '<span class="text-error">' + (data.message || 'Gagal') + '</span>';
+        }
+      } catch(err) {
+        msg.innerHTML = '<span class="text-error">Terjadi kesalahan: ' + err.message + '</span>';
+      }
+    });
+
+    document.getElementById('btn-delete').addEventListener('click', function() {
+      if (!confirm('Hapus post ini?')) return;
+      fetch('/api/admin/blog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', id: postId }),
+      }).then(function(r) { return r.json(); }).then(function(d) {
+        if (d.success) window.location.href = '/admin/blog';
+        else alert(d.message || 'Gagal menghapus');
+      });
+    });
+  </script>`} />
+</AdminLayout>

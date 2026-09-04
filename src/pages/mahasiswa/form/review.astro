@@ -1,0 +1,170 @@
+---
+// path: src/pages/mahasiswa/form/review.astro
+import MahasiswaLayout from '../../../layouts/MahasiswaLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import * as schema from '../../../db/schema';
+import { sessions, users, identitasPribadi, riwayatPendidikan, prestasiTahfidz, identitasKeluarga, kondisiRumah, domisiliOrtu, kebutuhanKhusus } from '../../../db/schema';
+import { getCookieName } from '../../../lib/auth';
+
+// Auth check
+const token = Astro.cookies.get(getCookieName())?.value;
+if (!token || !Astro.locals.runtime.env?.DB) {
+  return Astro.redirect('/login');
+}
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+const session = await db.select()
+  .from(sessions).innerJoin(users, eq(sessions.userId, users.id))
+  .where(eq(sessions.token, token)).limit(1);
+
+if (session.length === 0 || new Date(session[0].sessions.expiresAt) < new Date()) {
+  return Astro.redirect('/login');
+}
+
+const user = session[0].users;
+
+// Get all section data by userId
+const [s1, s2, s3, s4, s5, s6, s7] = await Promise.all([
+  db.select().from(identitasPribadi).where(eq(identitasPribadi.userId, user.id)).limit(1),
+  db.select().from(riwayatPendidikan).where(eq(riwayatPendidikan.userId, user.id)).limit(1),
+  db.select().from(prestasiTahfidz).where(eq(prestasiTahfidz.userId, user.id)).limit(1),
+  db.select().from(identitasKeluarga).where(eq(identitasKeluarga.userId, user.id)).limit(1),
+  db.select().from(kondisiRumah).where(eq(kondisiRumah.userId, user.id)).limit(1),
+  db.select().from(domisiliOrtu).where(eq(domisiliOrtu.userId, user.id)).limit(1),
+  db.select().from(kebutuhanKhusus).where(eq(kebutuhanKhusus.userId, user.id)).limit(1),
+]);
+
+const sections = [
+  { title: '1. Identitas Pribadi', data: s1[0] || null, href: '/mahasiswa/form/1' },
+  { title: '2. Riwayat Pendidikan', data: s2[0] || null, href: '/mahasiswa/form/2' },
+  { title: '3. Prestasi & Tahfidz', data: s3[0] || null, href: '/mahasiswa/form/3' },
+  { title: '4. Identitas Keluarga', data: s4[0] || null, href: '/mahasiswa/form/4' },
+  { title: '5. Kondisi Rumah', data: s5[0] || null, href: '/mahasiswa/form/5' },
+  { title: '6. Domisili Ortu/Wali', data: s6[0] || null, href: '/mahasiswa/form/6' },
+  { title: '7. Kebutuhan Khusus', data: s7[0] || null, href: '/mahasiswa/form/7' },
+];
+
+const canSubmit = user.profileStatus === 'incomplete' || user.profileStatus === 'rejected';
+const isSubmitted = user.profileStatus === 'pending' || user.profileStatus === 'verified';
+---
+
+<MahasiswaLayout title="Review Profil" namaUser={user.namaLengkap}>
+  <div class="mb-8">
+    <h1 class="text-2xl font-extrabold text-on-surface">Review Profil</h1>
+    <p class="text-outline mt-1">Periksa semua data sebelum submit untuk verifikasi</p>
+  </div>
+
+  <div class="space-y-6">
+    {sections.map((section) => (
+      <Card>
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-semibold text-on-surface">{section.title}</h3>
+          <a href={section.href} class="text-sm text-primary hover:text-primary font-medium flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">edit</span>
+            Edit
+          </a>
+        </div>
+        {section.data ? (
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Object.entries(section.data)
+              .filter(([key]) => !['id', 'userId', 'createdAt', 'updatedAt'].includes(key))
+              .map(([key, value]) => (
+                <div class="text-sm">
+                  <span class="text-outline">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                  <span class="ml-1 text-on-surface font-medium">{value || '-'}</span>
+                </div>
+              ))
+            }
+          </div>
+        ) : (
+          <p class="text-sm text-outline italic">Belum diisi</p>
+        )}
+      </Card>
+    ))}
+  </div>
+
+  <!-- Submit Button -->
+  <div class="mt-8 flex justify-between items-center">
+    <a href="/mahasiswa/form/7" class="inline-flex items-center gap-2 px-6 py-2.5 text-sm font-medium text-on-surface-variant bg-surface-container-lowest border border-outline-variant border-outline-variant rounded-lg hover:bg-surface hover:bg-surface-container-high transition">
+      <span class="material-symbols-outlined text-lg">arrow_back</span>
+      Kembali ke Form
+    </a>
+
+    {canSubmit && (
+      <button id="btn-submit" class="inline-flex items-center gap-2 px-8 py-3 text-base font-semibold text-white bg-primary rounded-xl hover:bg-primary shadow-lg transition">
+        <span class="material-symbols-outlined text-xl">send</span>
+        Submit Profil
+      </button>
+    )}
+    {isSubmitted && (
+      <div class="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-on-primary-container bg-primary-container/20 rounded-lg border border-outline-variant">
+        <span class="material-symbols-outlined text-lg">check_circle</span>
+        Profil sudah disubmit
+      </div>
+    )}
+
+    {user.profileStatus === 'verified' && (
+      <a
+        href="/api/pendaftaran/formulir-pdf"
+        class="inline-flex items-center gap-2 px-6 py-3 text-sm font-medium text-white bg-primary rounded-xl hover:bg-primary shadow-lg transition"
+      >
+        <span class="material-symbols-outlined text-lg">picture_as_pdf</span>
+        Download Formulir (PDF)
+      </a>
+    )}
+  </div>
+
+  {user.profileStatus === 'rejected' && user.profileCatatan && (
+    <div class="mt-4 p-4 bg-error-container rounded-lg border border-red-200 dark:border-red-800">
+      <p class="text-sm font-medium text-error">Catatan Admin:</p>
+      <p class="text-sm text-error mt-1">{user.profileCatatan}</p>
+    </div>
+  )}
+
+  <div id="submit-status" class="hidden fixed bottom-4 right-4 z-50"></div>
+
+  <script>
+    const btn = document.getElementById('btn-submit');
+    const statusEl = document.getElementById('submit-status');
+
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Apakah Anda yakin ingin submit profil?')) return;
+
+        btn.disabled = true;
+        btn.textContent = 'Mengirim...';
+
+        try {
+          const res = await fetch('/api/pendaftaran/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            statusEl.innerHTML = `
+              <div class="flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium bg-primary text-white">
+                <span class="material-symbols-outlined text-lg">check_circle</span>
+                Profil berhasil disubmit!
+              </div>
+            `;
+            statusEl.classList.remove('hidden');
+            setTimeout(() => window.location.href = '/mahasiswa', 2000);
+          } else {
+            alert(data.error || 'Gagal submit');
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined text-xl">send</span> Submit Profil';
+          }
+        } catch (err) {
+          alert('Terjadi kesalahan jaringan');
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-xl">send</span> Submit Profil';
+        }
+      });
+    }
+  </script>
+</MahasiswaLayout>

@@ -1,0 +1,359 @@
+---
+// path: src/pages/mahasiswa/daftar/[slug].astro
+import MahasiswaLayout from '../../../layouts/MahasiswaLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq, and } from 'drizzle-orm';
+import * as schema from '../../../db/schema';
+import { sessions, users, pendaftaran, beasiswa as beasiswaTable } from '../../../db/schema';
+import { getCookieName } from '../../../lib/auth';
+import { isPengumumanRilis } from '../../../lib/pengumuman';
+
+// Auth check
+const token = Astro.cookies.get(getCookieName())?.value;
+if (!token || !Astro.locals.runtime.env?.DB) {
+  return Astro.redirect('/login');
+}
+
+const db = drizzle(Astro.locals.runtime.env.DB, { schema });
+
+const session = await db.select()
+  .from(sessions).innerJoin(users, eq(sessions.userId, users.id))
+  .where(eq(sessions.token, token)).limit(1);
+
+if (session.length === 0 || new Date(session[0].sessions.expiresAt) < new Date()) {
+  return Astro.redirect('/login');
+}
+
+const user = session[0].users;
+
+// Get beasiswa by slug
+const slug = Astro.params.slug;
+const beaRows = await db.select().from(beasiswaTable)
+  .where(eq(beasiswaTable.slug, slug!)).limit(1);
+
+if (beaRows.length === 0) {
+  return Astro.redirect('/mahasiswa');
+}
+
+const b = beaRows[0];
+
+// Check if already registered
+const existingPendaftaran = await db.select().from(pendaftaran)
+  .where(and(eq(pendaftaran.userId, user.id), eq(pendaftaran.beasiswaId, b.id)))
+  .limit(1);
+
+const alreadyRegistered = existingPendaftaran.length > 0;
+const existingP = existingPendaftaran[0];
+
+// Status lolos/gagal hanya tampil kalau pengumuman beasiswa ini SUDAH dirilis
+const pengumumanRilis = alreadyRegistered ? await isPengumumanRilis(db, b.id) : false;
+
+// Check if beasiswa is open
+const now = new Date();
+const isOpen = b.aktif === 1 &&
+  (!b.dibukaPada || new Date(b.dibukaPada) <= now) &&
+  (!b.ditutupPada || new Date(b.ditutupPada) >= now);
+
+// Profile must be verified or pending to apply
+const profileReady = user.profileStatus === 'verified' || user.profileStatus === 'pending';
+const profileIncomplete = user.profileStatus === 'incomplete';
+const profileRejected = user.profileStatus === 'rejected';
+
+const statusLabels: Record<string, string> = {
+  pending: 'Menunggu',
+  accepted: 'Lolos',
+  rejected: 'Tidak Lolos',
+};
+
+// Kalau pengumuman belum rilis, status & catatan disembunyikan dari mahasiswa
+const detailStatusLabel = (rawStatus: string) =>
+  pengumumanRilis ? (statusLabels[rawStatus] || rawStatus) : 'Menunggu Pengumuman';
+---
+
+<MahasiswaLayout title={b.nama} namaUser={user.namaLengkap}>
+  <div class="max-w-2xl mx-auto">
+    <!-- Back -->
+    <a href="/mahasiswa" class="inline-flex items-center gap-1 text-sm text-outline hover:text-on-surface-variant dark:hover:text-outline-variant mb-6">
+      <span class="material-symbols-outlined text-lg">arrow_back</span>
+      Kembali ke Dashboard
+    </a>
+
+    <!-- Beasiswa Info -->
+    <Card class="mb-6">
+      <div class="flex items-start gap-4">
+        <div class="w-14 h-14 rounded-xl bg-primary-container flex items-center justify-center flex-shrink-0">
+          <span class="material-symbols-outlined text-primary text-3xl">school</span>
+        </div>
+        <div class="flex-1">
+          <h1 class="text-xl font-extrabold text-on-surface">{b.nama}</h1>
+          {b.deskripsi && (
+            <p class="text-sm text-on-surface-variant mt-1">{b.deskripsi}</p>
+          )}
+          <div class="flex flex-wrap gap-3 mt-3 text-xs text-outline">
+            {b.dibukaPada && (
+              <span class="flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">event</span>
+                Dibuka: {new Date(b.dibukaPada).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </span>
+            )}
+            {b.ditutupPada && (
+              <span class="flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">event_busy</span>
+                Ditutup: {new Date(b.ditutupPada).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+              </span>
+            )}
+          </div>
+        </div>
+        <span class:list={[
+          'px-3 py-1 text-xs rounded-full font-medium',
+          isOpen ? 'bg-primary-container text-on-primary-container'
+                 : 'bg-slate-200 text-on-surface-variant bg-surface-container-high dark:text-outline-variant',
+        ]}>
+          {isOpen ? 'Pendaftaran Dibuka' : 'Pendaftaran Ditutup'}
+        </span>
+      </div>
+
+      {b.persyaratan && (
+        <div class="mt-4 p-3 bg-surface bg-surface-container-lowest rounded-lg">
+          <h3 class="text-sm font-semibold text-on-surface-variant mb-2">Persyaratan:</h3>
+          <p class="text-sm text-on-surface-variant whitespace-pre-line">{b.persyaratan}</p>
+        </div>
+      )}
+    </Card>
+
+    <!-- Profile incomplete warning -->
+    {(profileIncomplete || profileRejected) && (
+      <Card class="mb-6">
+        <div class="flex items-start gap-4 p-2">
+          <span class="material-symbols-outlined text-3xl text-amber-500">warning</span>
+          <div class="flex-1">
+            <h3 class="text-base font-semibold text-on-surface">
+              {profileRejected ? 'Profil Ditolak' : 'Profil Belum Lengkap'}
+            </h3>
+            <p class="text-sm text-outline mt-1">
+              {profileRejected
+                ? 'Profil Anda ditolak oleh admin. Silakan perbaiki data dan submit ulang.'
+                : 'Anda harus melengkapi data profil terlebih dahulu sebelum mendaftar beasiswa.'}
+            </p>
+            {user.profileCatatan && (
+              <p class="text-sm text-error mt-2">Catatan: {user.profileCatatan}</p>
+            )}
+            <a href="/mahasiswa/form/1"
+              class="inline-flex items-center gap-2 mt-3 bg-secondary hover:opacity-90 text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+              <span class="material-symbols-outlined text-lg">edit_note</span>
+              {profileRejected ? 'Perbaiki Profil' : 'Lengkapi Profil'}
+            </a>
+          </div>
+        </div>
+      </Card>
+    )}
+
+    <!-- Action -->
+    {/* Berkas Kelulusan — hanya untuk mahasiswa Lolos dengan pengumuman rilis */}
+    {alreadyRegistered && pengumumanRilis && existingP.status === 'accepted' && (
+      <Card class="mb-6">
+        <div class="flex items-start gap-3 mb-4">
+          <span class="material-symbols-outlined text-3xl text-primary shrink-0">task_alt</span>
+          <div class="flex-1">
+            <h3 class="text-base font-semibold text-on-surface">Selamat! Anda Lolos Seleksi</h3>
+            <p class="text-sm text-outline mt-1">
+              Sebagai mahasiswa yang dinyatakan <span class="font-medium">LULUS</span> pada
+              {b.nama}, Anda wajib melengkapi berkas berikut. Klik <span class="font-medium">Unduh</span>,
+              isi &amp; scan, lalu <span class="font-medium">Unggah kembali</span> di bawah ini.
+            </p>
+          </div>
+        </div>
+
+        <div class="space-y-5">
+          <div class="p-4 border border-outline-variant rounded-xl">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-on-surface">Format 1</p>
+                <p class="text-xs text-outline">Formulir kelulusan — unduh, isi, scan, unggah kembali.</p>
+              </div>
+              <a href="https://drive.google.com/uc?export=download&id=1FnUhhfTuGqBq6hXD1hAlBmDPe8wBA21G"
+                target="_blank" rel="noopener"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 transition shrink-0">
+                <span class="material-symbols-outlined text-lg">download</span>
+                Unduh Format 1
+              </a>
+            </div>
+            <div class="mt-3">
+              <input type="file" id="file-format1" accept=".pdf,.jpg,.jpeg,.png" class="hidden"
+                data-beasiswa-id={b.id} data-type="format1" />
+              <label for="file-format1"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary-container/20 border border-primary/30 rounded-lg cursor-pointer hover:bg-primary-container/30 transition">
+                <span class="material-symbols-outlined text-lg">upload_file</span>
+                Pilih File &amp; Unggah
+              </label>
+              <span id="status-format1" class="ml-3 text-xs align-middle">
+                {existingP.format1FileId
+                  ? <span class="text-green-600 font-medium">✓ Terunggah: {existingP.format1OriginalFilename || 'Format 1'}</span>
+                  : <span class="text-outline">Belum diunggah</span>}
+              </span>
+            </div>
+          </div>
+
+          <div class="p-4 border border-outline-variant rounded-xl">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-semibold text-on-surface">Lampiran II</p>
+                <p class="text-xs text-outline">Lampiran pendukung — unduh, isi, scan, unggah kembali.</p>
+              </div>
+              <a href="https://drive.google.com/uc?export=download&id=1DTmrevlgRhQhsYNIREobxMVeNoxa9kdY"
+                target="_blank" rel="noopener"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:opacity-90 transition shrink-0">
+                <span class="material-symbols-outlined text-lg">download</span>
+                Unduh Lampiran II
+              </a>
+            </div>
+            <div class="mt-3">
+              <input type="file" id="file-lampiran2" accept=".pdf,.jpg,.jpeg,.png" class="hidden"
+                data-beasiswa-id={b.id} data-type="lampiran2" />
+              <label for="file-lampiran2"
+                class="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary-container/20 border border-primary/30 rounded-lg cursor-pointer hover:bg-primary-container/30 transition">
+                <span class="material-symbols-outlined text-lg">upload_file</span>
+                Pilih File &amp; Unggah
+              </label>
+              <span id="status-lampiran2" class="ml-3 text-xs align-middle">
+                {existingP.lampiran2FileId
+                  ? <span class="text-green-600 font-medium">✓ Terunggah: {existingP.lampiran2OriginalFilename || 'Lampiran II'}</span>
+                  : <span class="text-outline">Belum diunggah</span>}
+              </span>
+            </div>
+          </div>
+        </div>
+      </Card>
+    )}
+
+    {alreadyRegistered ? (
+      <Card>
+        <div class="text-center py-6">
+          <span class="material-symbols-outlined text-5xl text-primary mb-3">check_circle</span>
+          <h3 class="text-lg font-semibold text-on-surface">Sudah Terdaftar</h3>
+          <p class="text-sm text-outline mt-1">
+            Status: <span class="font-medium">{detailStatusLabel(existingP.status)}</span>
+          </p>
+          {!pengumumanRilis && (
+            <p class="text-sm text-outline mt-2">
+              Hasil seleksi akan ditampilkan setelah pengumuman dirilis.
+            </p>
+          )}
+          {pengumumanRilis && existingP.status === 'rejected' && existingP.catatanAdmin && (
+            <p class="text-sm text-error mt-2">Catatan: {existingP.catatanAdmin}</p>
+          )}
+          <div class="mt-4">
+            <a href="/mahasiswa"
+              class="inline-flex items-center gap-2 bg-surface-container-high hover:bg-surface-container-high hover:bg-surface-container-high text-on-surface-variant font-medium px-6 py-3 rounded-xl transition-colors">
+              <span class="material-symbols-outlined text-xl">dashboard</span>
+              Dashboard
+            </a>
+          </div>
+        </div>
+      </Card>
+    ) : isOpen && profileReady ? (
+      <Card>
+        <div class="text-center py-6">
+          <span class="material-symbols-outlined text-5xl text-primary mb-3">how_to_reg</span>
+          <h3 class="text-lg font-semibold text-on-surface">Daftar Beasiswa Ini</h3>
+          <p class="text-sm text-outline mt-1">
+            Anda akan mendaftar untuk {b.nama}
+          </p>
+          <div class="mt-4">
+            <button id="btn-daftar"
+              class="inline-flex items-center gap-2 bg-primary hover:bg-primary text-white font-semibold px-8 py-3.5 rounded-xl shadow-lg transition-colors">
+              <span class="material-symbols-outlined text-xl">edit_note</span>
+              Daftar Sekarang
+            </button>
+          </div>
+        </div>
+      </Card>
+    ) : isOpen && !profileReady ? (
+      <span></span>
+    ) : (
+      <Card>
+        <div class="text-center py-6">
+          <span class="material-symbols-outlined text-5xl text-outline-variant mb-3">block</span>
+          <h3 class="text-lg font-semibold text-on-surface-variant">Pendaftaran Ditutup</h3>
+          <p class="text-sm text-outline mt-1">
+            Pendaftaran untuk beasiswa ini belum dibuka atau sudah ditutup.
+          </p>
+        </div>
+      </Card>
+    )}
+  </div>
+
+  <script define:vars={{ beasiswaId: b.id }}>
+    const btn = document.getElementById('btn-daftar');
+    if (btn) {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="material-symbols-outlined text-xl animate-spin">progress_activity</span> Memproses...';
+
+        try {
+          const res = await fetch('/api/pendaftaran/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ beasiswaId }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            window.location.href = '/mahasiswa';
+          } else {
+            alert(data.error || 'Gagal mendaftar');
+            btn.disabled = false;
+            btn.innerHTML = '<span class="material-symbols-outlined text-xl">edit_note</span> Daftar Sekarang';
+          }
+        } catch {
+          alert('Terjadi kesalahan');
+          btn.disabled = false;
+          btn.innerHTML = '<span class="material-symbols-outlined text-xl">edit_note</span> Daftar Sekarang';
+        }
+      });
+    }
+
+    // Berkas Kelulusan upload (Format 1 / Lampiran II) — only when Lolos
+    const berkasInputs = document.querySelectorAll('input[type="file"][data-beasiswa-id]');
+    berkasInputs.forEach(function(input) {
+      input.addEventListener('change', function() {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const type = input.dataset.type;
+        const statusEl = document.getElementById('status-' + type);
+        const label = input.nextElementSibling;
+
+        if (label) {
+          label.innerHTML = '<span class="material-symbols-outlined text-lg animate-spin">progress_activity</span> Mengunggah...';
+          label.classList.add('opacity-60', 'pointer-events-none');
+        }
+        if (statusEl) statusEl.innerHTML = '<span class="text-outline">Mengunggah...</span>';
+
+        const fd = new FormData();
+        fd.append('file', file);
+        fd.append('beasiswaId', String(beasiswaId));
+        fd.append('type', type);
+
+        fetch('/api/pendaftaran/upload-berkas', { method: 'POST', body: fd })
+          .then(function(res){ return res.json(); })
+          .then(function(data){
+            if (data.success) {
+              if (statusEl) statusEl.innerHTML = '<span class="text-green-600 font-medium">✓ Terunggah: ' + data.filename + '</span>';
+            } else {
+              if (statusEl) statusEl.innerHTML = '<span class="text-error font-medium">Gagal: ' + (data.message || 'Upload gagal') + '</span>';
+            }
+          })
+          .catch(function(){
+            if (statusEl) statusEl.innerHTML = '<span class="text-error font-medium">Gagal mengunggah</span>';
+          })
+          .finally(function(){
+            if (label) {
+              label.innerHTML = '<span class="material-symbols-outlined text-lg">upload_file</span> Pilih File &amp; Unggah';
+              label.classList.remove('opacity-60', 'pointer-events-none');
+            }
+          });
+      });
+    });
+  </script>
+</MahasiswaLayout>

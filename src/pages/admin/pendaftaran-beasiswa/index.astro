@@ -1,0 +1,226 @@
+---
+// path: src/pages/admin/pendaftaran-beasiswa/index.astro
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import * as schema from '../../../db/schema';
+import { beasiswa } from '../../../db/schema';
+import { verifyGardaToken } from "../../../lib/auth";
+
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+// Fetch beasiswa list for initial render
+const allBeasiswa = await db.select({ id: beasiswa.id, nama: beasiswa.nama })
+  .from(beasiswa).where(eq(beasiswa.aktif, 1));
+---
+
+<AdminLayout title="Pendaftar Beasiswa" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="pendaftaran-beasiswa">
+  <div class="mb-6">
+    <h1 class="text-2xl font-extrabold text-on-surface">Pendaftar Beasiswa</h1>
+    <p class="text-outline mt-1">Kelola status kelulusan pendaftar per beasiswa</p>
+  </div>
+
+  <!-- Filters -->
+  <Card class="mb-6">
+    <div class="flex flex-col sm:flex-row gap-3">
+      <select id="filter-beasiswa" class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none">
+        <option value="">Semua Beasiswa</option>
+        {allBeasiswa.map(b => (
+          <option value={b.id}>{b.nama}</option>
+        ))}
+      </select>
+      <select id="filter-status" class="px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none">
+        <option value="">Semua Status</option>
+        <option value="pending">Penyeleksian</option>
+        <option value="accepted">Lolos</option>
+        <option value="rejected">Tidak Lolos</option>
+      </select>
+      <input type="text" id="filter-search" placeholder="Cari nama, NIK..."
+        class="flex-1 px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none" />
+    </div>
+  </Card>
+
+  <!-- Table -->
+  <Card>
+    <div id="status-msg" class="hidden mb-4"></div>
+    <div id="table-container">
+      <div class="text-center py-12">
+        <span class="material-symbols-outlined text-5xl text-outline-variant dark:text-on-surface-variant mb-3 animate-spin">progress_activity</span>
+        <p class="text-outline text-sm">Memuat data...</p>
+      </div>
+    </div>
+  </Card>
+</AdminLayout>
+
+<script>
+  const filterBeasiswa = document.getElementById('filter-beasiswa') as HTMLSelectElement;
+  const filterStatus = document.getElementById('filter-status') as HTMLSelectElement;
+  const filterSearch = document.getElementById('filter-search') as HTMLInputElement;
+  const tableContainer = document.getElementById('table-container')!;
+  const statusMsg = document.getElementById('status-msg')!;
+
+  let currentData: any[] = [];
+
+  const statusLabels: Record<string, { label: string; color: string }> = {
+    pending: { label: 'Penyeleksian', color: 'amber' },
+    accepted: { label: 'Lolos', color: 'green' },
+    rejected: { label: 'Tidak Lolos', color: 'red' },
+  };
+
+  // Badge desil DTSEN — null = belum ada data desil (bisa kosong)
+  function desilBadge(desil: string | null) {
+    if (!desil) {
+      return `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-surface-container-high text-outline-variant">Belum ada</span>`;
+    }
+    // Desil 1-4 = layak (ekonomi bawah). 5-10 = kurang layak. Desil bisa format "6-10" / "1" / "1-4".
+    const nums = desil.split('-').map(Number).filter(n => !isNaN(n));
+    const lower = nums[0];
+    const isLayak = nums.length > 0 && lower <= 4;
+    const label = `Desil ${desil}`;
+    const bg = isLayak
+      ? 'bg-primary-container/20 text-primary border border-primary/40'
+      : 'bg-secondary-container/30 text-secondary border border-secondary/40';
+    return `<span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${bg}">${label}</span>`;
+  }
+
+  async function loadData() {
+    tableContainer.innerHTML = `<div class="text-center py-12">
+      <span class="material-symbols-outlined text-5xl text-outline-variant dark:text-on-surface-variant mb-3 animate-spin">progress_activity</span>
+      <p class="text-outline text-sm">Memuat...</p>
+    </div>`;
+
+    const params = new URLSearchParams();
+    const bId = filterBeasiswa.value;
+    const st = filterStatus.value;
+    const q = filterSearch.value.trim();
+    if (bId) params.set('beasiswa_id', bId);
+    if (st) params.set('status', st);
+    if (q) params.set('q', q);
+
+    try {
+      const res = await fetch(`/api/admin/pendaftar?${params}`);
+      const data = await res.json();
+      if (data.success) {
+        currentData = data.pendaftar || [];
+        renderTable(currentData);
+      } else {
+        tableContainer.innerHTML = `<div class="text-center py-12 text-error">Gagal memuat: ${data.error}</div>`;
+      }
+    } catch (e) {
+      tableContainer.innerHTML = `<div class="text-center py-12 text-error">Gagal memuat data</div>`;
+    }
+  }
+
+  function renderTable(items: any[]) {
+    if (items.length === 0) {
+      tableContainer.innerHTML = `<div class="text-center py-12">
+        <span class="material-symbols-outlined text-5xl text-outline-variant dark:text-on-surface-variant mb-3">inbox</span>
+        <p class="text-outline">Tidak ada data pendaftar</p>
+      </div>`;
+      return;
+    }
+
+    const rows = items.map((p) => {
+      const sl = statusLabels[p.status] || { label: p.status, color: 'slate' };
+      const date = new Date(p.createdAt).toLocaleDateString('id-ID');
+      const btnPending = `<button onclick="setStatus(${p.id},'accepted')" class="px-2 py-1 text-xs font-medium bg-primary hover:opacity-90 text-white rounded transition">Lolos</button>
+        <button onclick="setStatus(${p.id},'rejected')" class="px-2 py-1 text-xs font-medium bg-error hover:opacity-90 text-white rounded transition">Tidak Lolos</button>`;
+      const btnDone = p.status !== 'pending'
+        ? `<span class="text-xs text-outline-variant">${new Date(p.catatanAdmin ? '' : '').toLocaleDateString?.('id-ID') || ''}</span>
+           <button onclick="setStatus(${p.id},'pending')" class="px-2 py-1 text-xs font-medium bg-secondary hover:opacity-90 text-white rounded transition">Kembalikan</button>`
+        : '';
+      return `<tr class="border-b border-slate-100 border-outline-variant hover:bg-surface hover:bg-surface-container-high/50">
+        <td class="py-3 px-3 text-on-surface font-mono text-xs">${p.nik || '-'}</td>
+        <td class="py-3 px-3 text-on-surface font-medium">${p.namaPendaftar}</td>
+        <td class="py-3 px-3 text-center">${desilBadge(p.desilDtsen)}</td>
+        <td class="py-3 px-3 text-on-surface-variant text-xs">${p.beasiswaNama}</td>
+        <td class="py-3 px-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium
+            ${sl.color === 'amber' ? 'bg-secondary-container text-on-secondary-container' : ''}
+            ${sl.color === 'green' ? 'bg-primary-container text-on-primary-container' : ''}
+            ${sl.color === 'red' ? 'bg-error-container text-on-error-container' : ''}">${sl.label}</span>
+        </td>
+        <td class="py-3 px-3 text-outline text-xs">${date}</td>
+        <td class="py-3 px-3">
+          <div class="flex items-center gap-1">
+            ${p.status === 'pending' ? btnPending : btnDone}
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+
+    tableContainer.innerHTML = `<div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-outline-variant">
+            <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">NIK</th>
+            <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Nama</th>
+            <th class="text-center py-3 px-3 font-semibold text-on-surface-variant">Desil DTSEN</th>
+            <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Beasiswa</th>
+            <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Status</th>
+            <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Tanggal</th>
+            <th class="text-left py-3 px-3 font-semibold text-on-surface-variant">Aksi</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="mt-4 text-sm text-outline">
+        Menampilkan ${items.length} pendaftar
+      </div>
+    </div>`;
+  }
+
+  window.setStatus = async function(id: number, status: string) {
+    const labels: Record<string, string> = { accepted: 'Lolos', rejected: 'Tidak Lolos', pending: 'Penyeleksian' };
+    if (!confirm(`Ubah status menjadi "${labels[status]}"?`)) return;
+
+    try {
+      const res = await fetch('/api/admin/pendaftar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        showMsg('Status berhasil diperbarui', 'green');
+        loadData();
+      } else {
+        showMsg(data.error || 'Gagal', 'red');
+      }
+    } catch {
+      showMsg('Terjadi kesalahan', 'red');
+    }
+  };
+
+  function showMsg(msg: string, color: string) {
+    statusMsg.className = `mb-4 p-3 rounded-lg text-sm font-medium ${
+      color === 'green' ? 'bg-primary-container/20 text-primary border border-primary/40' :
+      'bg-error-container text-error border border-outline-variant'
+    }`;
+    statusMsg.textContent = msg;
+    statusMsg.classList.remove('hidden');
+    setTimeout(() => statusMsg.classList.add('hidden'), 3000);
+  }
+
+  // Load on page ready
+  loadData();
+
+  // Filter change handlers
+  filterBeasiswa.addEventListener('change', loadData);
+  filterStatus.addEventListener('change', loadData);
+  let searchTimer: any;
+  filterSearch.addEventListener('input', () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadData, 400);
+  });
+</script>

@@ -1,0 +1,178 @@
+---
+// path: src/components/ui/FileUploadBox.astro
+// Reusable file upload component with drag-drop, progress bar, and preview
+// Adapted from wisuda-astro/src/components/public/FileUploadBox.astro
+
+interface Props {
+  id: string;           // Unique ID: "foto_formal", "kks", "ijazah"
+  label: string;        // Display label
+  bagian: string;       // Section name: "identitas_pribadi", "riwayat_pendidikan"
+  fieldName: string;    // DB field name: "foto_formal", "kks"
+  accept: string;       // File types: ".jpg,.jpeg,.png" or ".pdf"
+  currentFileId?: string; // Existing Google Drive file ID
+  currentFileName?: string; // Existing file name
+  isRequired?: boolean;
+  hint?: string;
+  icon?: string;
+}
+
+const {
+  id,
+  label,
+  bagian,
+  fieldName,
+  accept,
+  currentFileId = '',
+  currentFileName = '',
+  isRequired = false,
+  hint,
+  icon = 'upload_file',
+} = Astro.props;
+
+const hasFile = currentFileId.length > 5;
+const viewUrl = hasFile ? `https://drive.google.com/file/d/${currentFileId}/view` : '';
+---
+
+<div class="group relative" id={`upload-group-${id}`}>
+  <label for={`input-${id}`} class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
+    {label}
+    {isRequired && <span class="text-red-500">*</span>}
+  </label>
+
+  <!-- Hidden input to store Drive file ID -->
+  <input type="hidden" name={`${fieldName}_file_id`} id={`file-id-${id}`} value={currentFileId} />
+
+  <div
+    id={`box-${id}`}
+    class:list={[
+      "border-2 border-dashed rounded-xl p-4 flex flex-col items-center justify-center text-center min-h-[140px] transition-all relative overflow-hidden",
+      hasFile
+        ? "border-green-500 bg-green-50 dark:bg-green-900/10 dark:border-green-700"
+        : "border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/10"
+    ]}
+  >
+    <!-- File input (covers entire box for drag-drop) -->
+    <input
+      type="file"
+      id={`input-${id}`}
+      class:list={["absolute inset-0 w-full h-full opacity-0 z-10", hasFile ? "hidden" : "cursor-pointer"]}
+      accept={accept}
+      data-bagian={bagian}
+      data-field-name={fieldName}
+    />
+
+    <!-- Empty state -->
+    <div id={`view-${id}-empty`} class={hasFile ? "hidden" : ""}>
+      <div class="bg-white dark:bg-slate-700 p-2.5 rounded-full shadow-sm mb-2 inline-block">
+        <span class="material-symbols-outlined text-2xl text-slate-400">{icon}</span>
+      </div>
+      <p class="text-xs font-medium text-slate-600 dark:text-slate-400">Upload {label}</p>
+      {hint && <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{hint}</p>}
+    </div>
+
+    <!-- Progress state -->
+    <div id={`view-${id}-progress`} class="hidden w-full px-4">
+      <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 mb-2">
+        <div id={`bar-${id}`} class="h-2 rounded-full bg-blue-600 transition-all duration-300" style="width: 0%"></div>
+      </div>
+      <p class="text-[10px] font-medium text-blue-600 dark:text-blue-400 animate-pulse">Mengunggah...</p>
+    </div>
+
+    <!-- Success state -->
+    <div id={`view-${id}-success`} class:list={["flex flex-col items-center relative z-20", hasFile ? "" : "hidden"]}>
+      <div class="bg-green-100 dark:bg-green-900/30 p-2 rounded-full mb-2">
+        <span class="material-symbols-outlined text-green-600 dark:text-green-400 text-xl">check_circle</span>
+      </div>
+      <a
+        href={viewUrl}
+        target="_blank"
+        id={`link-${id}`}
+        class="text-[10px] text-blue-600 hover:underline mb-2 truncate max-w-[150px]"
+      >
+        {currentFileName || 'Lihat File'}
+      </a>
+      <button
+        type="button"
+        id={`btn-reset-${id}`}
+        class="px-2 py-1 bg-white dark:bg-slate-700 border border-red-200 dark:border-red-800 text-red-600 text-[10px] font-medium rounded hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-1"
+      >
+        <span class="material-symbols-outlined text-[10px]">delete</span> Hapus
+      </button>
+    </div>
+  </div>
+
+  {hint && !hasFile && (
+    <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{hint}</p>
+  )}
+</div>
+
+<script>
+  import { uploadFile, getGDriveViewUrl } from '../../lib/client/upload';
+
+  // Initialize all upload boxes on this page
+  document.querySelectorAll('[id^="input-"]').forEach((inputEl) => {
+    var input = inputEl;
+    var id = input.id.replace('input-', '');
+    var bagian = input.dataset.bagian;
+    var fieldName = input.dataset.fieldName;
+
+    if (!bagian || !fieldName) return;
+
+    var box = document.getElementById('box-' + id);
+    var viewEmpty = document.getElementById('view-' + id + '-empty');
+    var viewProg = document.getElementById('view-' + id + '-progress');
+    var viewSucc = document.getElementById('view-' + id + '-success');
+    var bar = document.getElementById('bar-' + id);
+    var fileIdInput = document.getElementById('file-id-' + id);
+    var linkEl = document.getElementById('link-' + id);
+    var btnReset = document.getElementById('btn-reset-' + id);
+
+    if (!box || !viewEmpty || !viewProg || !viewSucc || !bar || !fileIdInput) return;
+
+    // File selected
+    input.addEventListener('change', () => {
+      const file = input.files?.[0];
+      if (!file) return;
+
+      // Show progress
+      viewEmpty.classList.add('hidden');
+      viewSucc.classList.add('hidden');
+      viewProg.classList.remove('hidden');
+      bar.style.width = '0%';
+
+      uploadFile(file, bagian, fieldName, {
+        onProgress: (percent) => {
+          bar.style.width = `${percent}%`;
+        },
+        onSuccess: (result) => {
+          fileIdInput.value = result.id;
+          viewProg.classList.add('hidden');
+          viewSucc.classList.remove('hidden');
+          box.classList.remove('border-slate-300', 'dark:border-slate-600', 'bg-slate-50', 'dark:bg-slate-800');
+          box.classList.add('border-green-500', 'bg-green-50', 'dark:bg-green-900/10', 'dark:border-green-700');
+          input.classList.add('hidden');
+          if (linkEl) {
+            linkEl.href = getGDriveViewUrl(result.id);
+            linkEl.textContent = result.filename;
+          }
+        },
+        onError: (message) => {
+          alert(`Upload gagal: ${message}`);
+          viewProg.classList.add('hidden');
+          viewEmpty.classList.remove('hidden');
+        },
+      });
+    });
+
+    // Reset button
+    btnReset?.addEventListener('click', () => {
+      fileIdInput.value = '';
+      input.value = '';
+      input.classList.remove('hidden');
+      viewSucc.classList.add('hidden');
+      viewEmpty.classList.remove('hidden');
+      box.classList.remove('border-green-500', 'bg-green-50', 'dark:bg-green-900/10', 'dark:border-green-700');
+      box.classList.add('border-slate-300', 'dark:border-slate-600', 'bg-slate-50', 'dark:bg-slate-800');
+    });
+  });
+</script>

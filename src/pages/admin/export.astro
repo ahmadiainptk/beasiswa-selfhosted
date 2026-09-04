@@ -1,0 +1,79 @@
+---
+// path: src/pages/admin/export.astro
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import { drizzle } from 'drizzle-orm/d1';
+import { eq, sql } from 'drizzle-orm';
+import * as schema from '../../db/schema';
+import { pendaftaran, users } from '../../db/schema';
+import { verifyGardaToken } from "../../lib/auth";
+
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+
+// ── Get counts — via SQL aggregation, bukan fetch-all ──
+const countRow = await db.select({
+  total: sql<number>`COUNT(*)`,
+  submitted: sql<number>`SUM(CASE WHEN ${pendaftaran.status} = 'submitted' THEN 1 ELSE 0 END)`,
+  verified: sql<number>`SUM(CASE WHEN ${pendaftaran.status} = 'verified' THEN 1 ELSE 0 END)`,
+  rejected: sql<number>`SUM(CASE WHEN ${pendaftaran.status} = 'rejected' THEN 1 ELSE 0 END)`,
+}).from(pendaftaran);
+const total = Number(countRow[0]?.total || 0);
+const submitted = Number(countRow[0]?.submitted || 0);
+const verified = Number(countRow[0]?.verified || 0);
+const rejected = Number(countRow[0]?.rejected || 0);
+---
+
+<AdminLayout title="Export Data" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="export">
+  <div class="mb-8">
+    <h1 class="text-2xl font-extrabold text-on-surface">Export Data</h1>
+    <p class="text-outline mt-1">Export data pendaftaran ke format CSV</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Stats -->
+    <Card title="Ringkasan Data">
+      <div class="space-y-4">
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-on-surface-variant">Total Pendaftaran</span>
+          <span class="font-bold text-on-surface">{total}</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-on-surface-variant">Menunggu Verifikasi</span>
+          <span class="font-bold text-primary">{submitted}</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-on-surface-variant">Terverifikasi</span>
+          <span class="font-bold text-primary">{verified}</span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-sm text-on-surface-variant">Ditolak</span>
+          <span class="font-bold text-error">{rejected}</span>
+        </div>
+      </div>
+    </Card>
+
+    <!-- Export Actions -->
+    <Card title="Export">
+      <div class="space-y-4">
+        <a
+          href="/api/admin/export"
+          class="flex items-center justify-center gap-2 w-full py-3 bg-primary hover:opacity-90 text-white font-semibold rounded-lg shadow-md transition"
+        >
+          <span class="material-symbols-outlined text-xl">download</span>
+          Download CSV ({total} data)
+        </a>
+        <p class="text-xs text-outline text-center">
+          File CSV berisi semua data pendaftaran termasuk identitas, pendidikan, prestasi, keluarga, kondisi rumah, dan domisili.
+        </p>
+      </div>
+    </Card>
+  </div>
+</AdminLayout>

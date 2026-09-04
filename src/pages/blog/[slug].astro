@@ -1,0 +1,167 @@
+---
+// path: src/pages/blog/[slug].astro
+import PublicLayout from "../../layouts/PublicLayout.astro";
+
+import { drizzle } from "drizzle-orm/d1";
+import { eq, and } from "drizzle-orm";
+import * as schema from "../../db/schema";
+import {
+  blogPosts,
+  users,
+  blogCategories,
+  blogTags,
+  blogPostTags,
+} from "../../db/schema";
+
+const slug = Astro.params.slug;
+
+// Fetch post by slug, only published, with category and tags
+let post: any = null;
+
+try {
+  if (Astro.locals.runtime.env?.DB && slug) {
+    const db = drizzle(Astro.locals.runtime.env.DB, { schema });
+    const rows = await db
+      .select({
+        id: blogPosts.id,
+        title: blogPosts.title,
+        slug: blogPosts.slug,
+        content: blogPosts.content,
+        excerpt: blogPosts.excerpt,
+        coverImage: blogPosts.coverImage,
+        publishedAt: blogPosts.publishedAt,
+        categoryId: blogPosts.categoryId,
+        authorName: users.namaLengkap,
+        categoryName: blogCategories.name,
+        categorySlug: blogCategories.slug,
+      })
+      .from(blogPosts)
+      .leftJoin(users, eq(blogPosts.authorId, users.id))
+      .leftJoin(blogCategories, eq(blogPosts.categoryId, blogCategories.id))
+      .where(and(eq(blogPosts.slug, slug), eq(blogPosts.status, "published")))
+      .limit(1);
+
+    if (rows.length > 0) {
+      post = rows[0];
+
+      // Fetch tags
+      try {
+        const tagRows = await db
+          .select({ name: blogTags.name })
+          .from(blogPostTags)
+          .innerJoin(blogTags, eq(blogPostTags.tagId, blogTags.id))
+          .where(eq(blogPostTags.postId, post.id));
+        post.tags = tagRows.map((r: any) => r.name);
+      } catch (e) {
+        post.tags = [];
+      }
+    }
+  }
+} catch (e) {
+  // fallback: null
+}
+
+// 404 if not found
+if (!post) return Astro.redirect("/404");
+---
+
+<PublicLayout title={post.title} description={post.excerpt || undefined} image={post.coverImage || undefined} url={`/blog/${post.slug}`}>
+  <!-- Main Content -->
+  <main class="max-w-[1280px] mx-auto px-gutter py-16">
+    <!-- Back Link -->
+    <a
+      href="/blog"
+      class="inline-flex items-center gap-1 text-sm text-outline hover:text-on-surface transition mb-6"
+    >
+      <span class="material-symbols-outlined text-lg">arrow_back</span> Kembali ke Berita
+    </a>
+
+    <!-- Cover Image -->
+    {
+      post.coverImage && (
+        <div class="rounded-xl overflow-hidden mb-8">
+          <img
+            src={post.coverImage}
+            alt={post.title}
+            class="w-full h-auto object-cover max-h-96"
+          />
+        </div>
+      )
+    }
+
+    <!-- Article -->
+    <article>
+      <!-- Title -->
+      <h1 class="text-[32px] sm:text-[40px] font-extrabold font-[Montserrat] text-primary leading-tight">
+        {post.title}
+      </h1>
+
+      <!-- Meta: Author, Date, Category -->
+      <div class="flex flex-wrap items-center gap-4 mt-4 text-sm text-outline">
+        {
+          post.categoryName && (
+            <a
+              href={`/blog?kategori=${post.categorySlug}`}
+              class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider bg-tertiary-container text-on-tertiary-container hover:opacity-80 transition-colors"
+            >
+              <span class="material-symbols-outlined text-sm">folder</span>
+              {post.categoryName}
+            </a>
+          )
+        }
+        {
+          post.authorName && (
+            <span class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-base">person</span>
+              {post.authorName}
+            </span>
+          )
+        }
+        {
+          post.publishedAt && (
+            <span class="flex items-center gap-1.5">
+              <span class="material-symbols-outlined text-base">calendar_today</span>
+              {new Date(post.publishedAt).toLocaleDateString("id-ID", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </span>
+          )
+        }
+      </div>
+
+      <!-- Tags -->
+      {
+        post.tags && post.tags.length > 0 && (
+          <div class="flex flex-wrap gap-2 mt-4">
+            {post.tags.map((tag: string) => (
+              <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold tracking-wider bg-primary-container/20 text-primary">
+                <span class="material-symbols-outlined text-xs mr-1">tag</span>
+                {tag}
+              </span>
+            ))}
+          </div>
+        )
+      }
+
+      <!-- Divider -->
+      <hr class="my-8 border-outline-variant" />
+
+      <!-- Content from Google Docs -->
+      <div class="blog-content" set:html={post.content} />
+    </article>
+
+    <!-- Back Link Bottom -->
+    <div class="mt-12 pt-8 border-t border-outline-variant">
+      <a
+        href="/blog"
+        class="inline-flex items-center gap-2 text-primary hover:opacity-80 font-semibold text-sm transition"
+      >
+        <span class="material-symbols-outlined text-lg">arrow_back</span>
+        Lihat semua berita
+      </a>
+    </div>
+  </main>
+</PublicLayout>

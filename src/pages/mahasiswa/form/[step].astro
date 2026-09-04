@@ -1,0 +1,14 @@
+---
+// path: src/pages/mahasiswa/form/[step].astro
+// DEPRECATED — SPA: semua step dirender di index.astro (client-side toggle, tanpa reload per step).
+// Route ini cuma redirect buat backward compat (old links /mahasiswa/form/N -> /mahasiswa/form?step=N).
+import { getCookieName } from "../../../lib/auth";
+
+const token = Astro.cookies.get(getCookieName())?.value;
+if (!token || !Astro.locals.runtime.env?.DB) {
+  return Astro.redirect("/login");
+}
+
+const step = parseInt(Astro.params.step || "1");
+return Astro.redirect(step >= 1 && step <= 7 ? `/mahasiswa/form?step=${step}` : "/mahasiswa/form?step=1");
+---

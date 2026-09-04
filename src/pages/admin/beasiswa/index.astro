@@ -1,0 +1,411 @@
+---
+// path: src/pages/admin/beasiswa/index.astro
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import Card from '../../../components/ui/Card.astro';
+
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import * as schema from '../../../db/schema';
+
+// GARDA SSO
+import { verifyGardaToken } from "../../../lib/auth";
+
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+---
+
+<AdminLayout title="Kelola Beasiswa" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="beasiswa">
+  <div class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-extrabold text-on-surface">Kelola Beasiswa</h1>
+      <p class="text-outline mt-1">Atur jenis beasiswa yang tersedia untuk pendaftaran</p>
+    </div>
+    <button id="btn-tambah" onclick="openModal()" class="inline-flex items-center gap-2 bg-primary hover:bg-primary text-white font-medium px-5 py-2.5 rounded-lg text-sm transition-colors">
+      <span class="material-symbols-outlined text-lg">add</span>
+      Tambah Beasiswa
+    </button>
+  </div>
+
+  <!-- Beasiswa List -->
+  <Card title="Daftar Beasiswa">
+    <div id="beasiswa-list" class="space-y-3">
+      <p class="text-sm text-outline">Memuat...</p>
+    </div>
+  </Card>
+
+  <!-- Add/Edit Modal (shared) -->
+  <div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-start justify-center p-4 overflow-y-auto">
+    <div class="bg-surface-container-lowest rounded-xl shadow-xl max-w-2xl w-full p-6 my-8">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="modal-title" class="text-lg font-bold text-on-surface">Tambah Beasiswa</h3>
+        <button type="button" id="modal-close" class="text-outline hover:text-on-surface">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <form id="beasiswa-form" class="space-y-4">
+        <input type="hidden" name="id" />
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-on-surface-variant mb-1.5">Nama Beasiswa <span class="text-error">*</span></label>
+            <input type="text" name="nama" required placeholder="Contoh: KIP Kuliah 2026"
+              class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-on-surface-variant mb-1.5">Deskripsi Singkat</label>
+            <input type="text" name="deskripsi" placeholder="Penjelasan singkat tentang beasiswa"
+              class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-on-surface-variant mb-1.5">Persyaratan Umum</label>
+          <textarea name="persyaratan" rows="3" placeholder="Syarat-syarat umum pendaftaran..."
+            class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none"></textarea>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-on-surface-variant mb-1.5">Dibuka Pada (WIB)</label>
+            <input type="datetime-local" name="dibuka_pada"
+              class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-on-surface-variant mb-1.5">Ditutup Pada (WIB)</label>
+            <input type="datetime-local" name="ditutup_pada"
+              class="w-full px-3 py-2.5 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm focus:ring-2 focus:ring-primary outline-none" />
+          </div>
+        </div>
+
+        <!-- Dokumen persyaratan -->
+        <div class="pt-2 border-t border-outline-variant">
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-sm font-medium text-on-surface-variant">Dokumen Persyaratan</label>
+            <button type="button" id="btn-add-doc" class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary border border-primary/40 rounded-lg hover:bg-primary-container/20 transition">
+              <span class="material-symbols-outlined text-base">add</span>
+              Tambah Dokumen
+            </button>
+          </div>
+          <p class="text-xs text-outline mb-3">Unggah dokumen persyaratan (format/formulir) yang perlu diunduh mahasiswa. Setiap dokumen punya judul dan deskripsi.</p>
+          <div id="doc-list" class="space-y-3"></div>
+        </div>
+
+        <div class="flex gap-3 justify-end pt-2">
+          <button type="button" id="modal-cancel" class="px-4 py-2 text-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition">Batal</button>
+          <button type="submit" id="btn-submit" class="px-4 py-2 bg-primary hover:bg-primary text-white text-sm font-medium rounded-lg transition">Simpan</button>
+        </div>
+        <div id="form-result" class="hidden"></div>
+      </form>
+    </div>
+  </div>
+</AdminLayout>
+
+<script>
+  var modal = document.getElementById('modal');
+  var modalTitle = document.getElementById('modal-title');
+  var form = document.getElementById('beasiswa-form');
+  var formResult = document.getElementById('form-result');
+  var listEl = document.getElementById('beasiswa-list');
+  var docList = document.getElementById('doc-list');
+  var btnAddDoc = document.getElementById('btn-add-doc');
+  var btnSubmit = document.getElementById('btn-submit');
+
+  // Track documents (judul, deskripsi, fileId, filename, mime, size, id)
+  var docs = [];
+  var docCounter = 0;
+
+  function fmtDateTime(d) {
+    if (!d) return '-';
+    var dt = new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) +
+      ' ' + dt.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+  }
+
+  // Convert ISO datetime (UTC) to datetime-local string (WIB)
+  function toLocalInput(d) {
+    if (!d) return '';
+    var dt = new Date(d);
+    if (isNaN(dt.getTime())) return d;
+    // Convert to WIB (UTC+7) for display in the input
+    var wib = new Date(dt.getTime() + 7 * 60 * 60 * 1000);
+    var pad = function(n){ return String(n).padStart(2, '0'); };
+    return wib.getUTCFullYear() + '-' + pad(wib.getUTCMonth()+1) + '-' + pad(wib.getUTCDate()) +
+      'T' + pad(wib.getUTCHours()) + ':' + pad(wib.getUTCMinutes());
+  }
+
+  // Convert datetime-local (WIB) to ISO UTC string for storage
+  function fromLocalInput(v) {
+    if (!v) return null;
+    // v is "YYYY-MM-DDTHH:mm" in WIB
+    var dt = new Date(v + ':00+07:00');
+    return dt.toISOString();
+  }
+
+  function openModal() {
+    form.reset();
+    form.querySelector('[name=id]').value = '';
+    docs = [];
+    renderDocs();
+    formResult.classList.add('hidden');
+    modalTitle.textContent = 'Tambah Beasiswa';
+    btnSubmit.textContent = 'Simpan';
+    modal.classList.remove('hidden');
+  }
+
+  function closeModal() {
+    modal.classList.add('hidden');
+  }
+
+  window.openModal = openModal;
+
+  // Render doc list
+  function renderDocs() {
+    if (docs.length === 0) {
+      docList.innerHTML = '<p class="text-xs text-outline italic">Belum ada dokumen. Klik "Tambah Dokumen" untuk menambahkan.</p>';
+      return;
+    }
+    docList.innerHTML = docs.map(function(doc, i) {
+      return `
+        <div class="doc-item p-3 border border-outline-variant rounded-lg bg-surface-container-lowest space-y-2">
+          <div class="flex items-start justify-between gap-2">
+            <span class="text-xs font-semibold text-on-surface-variant">Dokumen ${i+1}</span>
+            <button type="button" onclick="removeDoc(${i})" class="text-error hover:bg-error-container p-1 rounded">
+              <span class="material-symbols-outlined text-base">delete</span>
+            </button>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[11px] font-medium text-outline mb-1">Judul</label>
+              <input type="text" value="${escAttr(doc.judul)}" data-doc="${i}" data-field="judul"
+                placeholder="Contoh: Formulir Pendaftaran" oninput="updateDocField(${i}, 'judul', this.value)"
+                class="w-full px-2 py-1.5 rounded border border-outline-variant bg-surface-container-lowest text-xs focus:ring-2 focus:ring-primary outline-none" />
+            </div>
+            <div>
+              <label class="block text-[11px] font-medium text-outline mb-1">Deskripsi</label>
+              <input type="text" value="${escAttr(doc.deskripsi)}" data-doc="${i}" data-field="deskripsi"
+                placeholder="Penjelasan singkat" oninput="updateDocField(${i}, 'deskripsi', this.value)"
+                class="w-full px-2 py-1.5 rounded border border-outline-variant bg-surface-container-lowest text-xs focus:ring-2 focus:ring-primary outline-none" />
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <label class="doc-upload-label inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-primary border border-primary/40 rounded-lg hover:bg-primary-container/20 cursor-pointer">
+              <span class="material-symbols-outlined text-base">upload</span>
+              ${doc.fileId ? 'Ganti File' : 'Unggah File'}
+              <input type="file" class="hidden" onchange="uploadDocFile(${i}, this)" />
+            </label>
+            <span class="doc-file-name text-xs text-outline truncate max-w-[200px]">
+              ${doc.fileId ? escHtml(doc.originalFilename || 'file') : 'Belum ada file'}
+            </span>
+            ${doc.fileId ? `<a href="https://drive.google.com/file/d/${doc.fileId}/view" target="_blank" class="text-xs text-primary hover:underline">Lihat</a>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function escAttr(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+  function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  window.updateDocField = function(i, field, val) {
+    if (docs[i]) docs[i][field] = val;
+  };
+
+  window.removeDoc = function(i) {
+    docs.splice(i, 1);
+    renderDocs();
+  };
+
+  window.uploadDocFile = async function(i, inputEl) {
+    var file = inputEl.files && inputEl.files[0];
+    if (!file) return;
+    var nameEl = inputEl.closest('.doc-item').querySelector('.doc-file-name');
+    nameEl.textContent = 'Mengunggah...';
+
+    var fd = new FormData();
+    fd.append('file', file);
+    try {
+      var res = await fetch('/api/admin/beasiswa-upload', { method: 'POST', body: fd });
+      var data = await res.json();
+      if (data.success) {
+        if (docs[i]) {
+          docs[i].fileId = data.id;
+          docs[i].originalFilename = data.filename;
+          docs[i].mimeType = data.mimeType;
+          docs[i].fileSize = data.size;
+        }
+        renderDocs();
+      } else {
+        alert(data.message || 'Upload gagal');
+        renderDocs();
+      }
+    } catch (e) {
+      alert('Terjadi kesalahan jaringan');
+      renderDocs();
+    }
+  };
+
+  btnAddDoc.addEventListener('click', function() {
+    docs.push({ judul: '', deskripsi: '', fileId: '', originalFilename: '', mimeType: '', fileSize: 0 });
+    renderDocs();
+  });
+
+  async function loadList() {
+    try {
+      const res = await fetch('/api/admin/beasiswa');
+      const data = await res.json();
+      if (!data.success) {
+        listEl.innerHTML = `<p class="text-sm text-error">${data.message}</p>`;
+        return;
+      }
+      if (data.beasiswa.length === 0) {
+        listEl.innerHTML = `<div class="text-center py-8">
+          <span class="material-symbols-outlined text-4xl text-outline-variant dark:text-on-surface-variant mb-2">school</span>
+          <p class="text-sm text-outline">Belum ada beasiswa</p>
+        </div>`;
+        return;
+      }
+
+      listEl.innerHTML = data.beasiswa.map(function(b) {
+        var docCount = (b.dokumen || []).length;
+        return `
+        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-surface bg-surface-container-lowest rounded-lg">
+          <div class="flex-1">
+            <div class="flex items-center gap-2 mb-1">
+              <h4 class="text-sm font-semibold text-on-surface">${escHtml(b.nama)}</h4>
+              <span class="px-2 py-0.5 text-xs rounded-full font-medium ${b.aktif ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-high text-on-surface-variant'}">
+                ${b.aktif ? 'Aktif' : 'Nonaktif'}
+              </span>
+              ${docCount > 0 ? `<span class="px-2 py-0.5 text-xs rounded-full bg-surface-container-high text-on-surface-variant">${docCount} dokumen</span>` : ''}
+            </div>
+            ${b.deskripsi ? `<p class="text-xs text-outline">${escHtml(b.deskripsi)}</p>` : ''}
+            <p class="text-xs text-outline-variant dark:text-outline mt-1">
+              Dibuka: ${fmtDateTime(b.dibukaPada)} &middot; Ditutup: ${fmtDateTime(b.ditutupPada)}
+            </p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="toggleBeasiswa(${b.id})" class="px-2 py-1 text-xs rounded-lg font-medium transition ${b.aktif ? 'text-secondary hover:bg-secondary-container/20' : 'text-primary hover:bg-primary-container/20'}">
+              <span class="material-symbols-outlined text-sm align-middle">${b.aktif ? 'toggle_off' : 'toggle_on'}</span>
+              ${b.aktif ? 'Nonaktifkan' : 'Aktifkan'}
+            </button>
+            <button onclick='editBeasiswa(${JSON.stringify(b).replace(/'/g, "&#39;")})' class="px-2 py-1 text-xs text-primary hover:bg-primary-container/20 rounded-lg font-medium transition">
+              <span class="material-symbols-outlined text-sm align-middle">edit</span>
+              Edit
+            </button>
+          </div>
+        </div>
+      `}).join('');
+    } catch (err) {
+      listEl.innerHTML = '<p class="text-sm text-error">Gagal memuat data</p>';
+    }
+  }
+
+  window.toggleBeasiswa = async function(id) {
+    try {
+      const res = await fetch('/api/admin/beasiswa', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (data.success) loadList();
+      else alert(data.message);
+    } catch { alert('Terjadi kesalahan'); }
+  };
+
+  window.editBeasiswa = function(b) {
+    form.querySelector('[name=id]').value = b.id;
+    form.querySelector('[name=nama]').value = b.nama || '';
+    form.querySelector('[name=deskripsi]').value = b.deskripsi || '';
+    form.querySelector('[name=persyaratan]').value = b.persyaratan || '';
+    form.querySelector('[name=dibuka_pada]').value = toLocalInput(b.dibukaPada);
+    form.querySelector('[name=ditutup_pada]').value = toLocalInput(b.ditutupPada);
+
+    // Load documents
+    docs = (b.dokumen || []).map(function(d) {
+      return {
+        id: d.id, judul: d.judul || '', deskripsi: d.deskripsi || '',
+        fileId: d.fileId || '', originalFilename: d.originalFilename || '',
+        mimeType: d.mimeType || '', fileSize: d.fileSize || 0,
+      };
+    });
+    renderDocs();
+
+    formResult.classList.add('hidden');
+    modalTitle.textContent = 'Edit Beasiswa';
+    btnSubmit.textContent = 'Simpan Perubahan';
+    modal.classList.remove('hidden');
+  };
+
+  document.getElementById('modal-close').addEventListener('click', closeModal);
+  document.getElementById('modal-cancel').addEventListener('click', closeModal);
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeModal();
+  });
+
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = 'Menyimpan...';
+
+    var id = form.querySelector('[name=id]').value;
+
+    var payload = {
+      nama: form.querySelector('[name=nama]').value,
+      deskripsi: form.querySelector('[name=deskripsi]').value,
+      persyaratan: form.querySelector('[name=persyaratan]').value,
+      dibuka_pada: fromLocalInput(form.querySelector('[name=dibuka_pada]').value),
+      ditutup_pada: fromLocalInput(form.querySelector('[name=ditutup_pada]').value),
+      dokumen: docs.map(function(d) { return {
+        id: d.id,
+        judul: d.judul,
+        deskripsi: d.deskripsi,
+        fileId: d.fileId,
+        originalFilename: d.originalFilename,
+        mimeType: d.mimeType,
+        fileSize: d.fileSize,
+      }; }),
+    };
+
+    try {
+      var res;
+      if (id) {
+        payload.id = Number(id);
+        res = await fetch('/api/admin/beasiswa', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } else {
+        res = await fetch('/api/admin/beasiswa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      }
+      var data = await res.json();
+      if (data.success) {
+        closeModal();
+        loadList();
+      } else {
+        formResult.classList.remove('hidden');
+        formResult.innerHTML = `<p class="text-sm text-error">${data.message || 'Gagal'}</p>`;
+      }
+    } catch (err) {
+      formResult.classList.remove('hidden');
+      formResult.innerHTML = '<p class="text-sm text-error">Terjadi kesalahan</p>';
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = id ? 'Simpan Perubahan' : 'Simpan';
+    }
+  });
+
+  loadList();
+</script>

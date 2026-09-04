@@ -1,0 +1,313 @@
+---
+// path: src/pages/changelog.astro
+import PublicLayout from '../layouts/PublicLayout.astro';
+
+const updates = [
+  {
+    version: '0.21.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'perbaikan', text: 'Optimasi query D1 (hemat quota free-tier 100k row-read/hari): pagination server-side di /admin/pendaftaran & /api/admin/pendaftar, count via SQL aggregation (bukan fetch-all ke JS) di admin dashboard & export, export CSV diubah dari N+1 (8 query/user) jadi batch-load per section (8 query total), tambah 13 index D1 (users.role/profile_status, pendaftaran.status/beasiswa_id/user_id, user_id di semua tabel section)' },
+    ]
+  },
+  {
+    version: '0.20.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'perbaikan', text: 'Perbaiki kontras warna badge/chip (Desil DTSEN, status profil, status keluhan, label changelog): teks terang di background transparan sebelumnya nyaris tidak terbaca — sekarang pakai kontras yang benar (text-primary di bg-primary-container/20, solid container dihapus class-nya)' },
+    ]
+  },
+  {
+    version: '0.19.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Kolom Desil DTSEN di DB (users.desil_dtsen, migrasi 0010) + kolom Desil DTSEN di /admin/pendaftaran-beasiswa dengan badge layak/kelayakan (bisa kosong jika belum ada data desil)' },
+    ]
+  },
+  {
+    version: '0.18.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'perbaikan', text: 'Formulir PDF tambah disclaimer (box merah) bahwa formulir = bukti data terdaftar/terverifikasi, BUKAN bukti ditetapkan sebagai penerima beasiswa' },
+    ]
+  },
+  {
+    version: '0.17.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Mahasiswa yang dinyatakan Lolos (accepted) diminta unduh, isi, scan & unggah kembali Format 1 dan Lampiran II (per beasiswa) di halaman detail — + hint status di dashboard' },
+    ]
+  },
+  {
+    version: '0.16.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'perbaikan', text: 'Formulir PDF menampilkan SEMUA field form 1-7 (104 field) — baik yang diisi maupun kosong (ditampilkan "-"), termasuk section tanpa data' },
+    ]
+  },
+  {
+    version: '0.15.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'perbaikan', text: 'Kop surat formulir PDF mengikuti format resmi: logo IAIN Pontianak (kiri) + KEMENAG/IAIN/BIRO AUAK/alamat + double divider, sesuai format bukti pendaftaran wisuda' },
+    ]
+  },
+  {
+    version: '0.14.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Mahasiswa terverifikasi dapat mengunduh Formulir (PDF) berisi semua data form 1-7 (endpoint /api/pendaftaran/formulir-pdf + tombol di dashboard & review)' },
+    ]
+  },
+  {
+    version: '0.13.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Banner cek Desil DTSEN juga tampil di halaman welcome/dashboard mahasiswa (bukan hanya di formulir)' },
+    ]
+  },
+  {
+    version: '0.12.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Banner petunjuk di atas formulir: mahasiswa wajib cek Desil DTSEN di BPS (dtsen-form.bps.go.id) & pembaruan data jika ada kesalahan — desil dipakai verifikasi kelayakan beasiswa' },
+    ]
+  },
+  {
+    version: '0.11.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'perbaikan', text: 'Stepper form: centang hijau hanya tampil jika section benar-benar berisi data (sebelumnya row kosong dari "Simpan & Lanjut" dianggap selesai)' },
+    ]
+  },
+  {
+    version: '0.10.0',
+    date: '4 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Field upload Surat Keterangan Terdampak PHK/Bencana di Formulir 4 (Identitas Keluarga)' },
+      { type: 'hapus', text: 'Hapus field upload Kartu PKH di Formulir 1 (Identitas Pribadi)' },
+      { type: 'hapus', text: 'Hapus field upload Bukti Bayar Listrik Bulan 2 dan Bulan 3 di Formulir 5 (Kondisi Rumah)' },
+      { type: 'perbaikan', text: 'Ganti judul field menjadi "Bukti Bayar Listrik 1 Bulan Terakhir" (Formulir 5)' },
+      { type: 'perbaikan', text: 'Perbarui link template Surat Pernyataan Penghasilan Ortu ke format terbaru' },
+    ]
+  },
+  {
+    version: '0.8.0',
+    date: '3 September 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Pengumuman hasil seleksi per beasiswa (batch, bukan per individu) + upload SK (PDF) via admin' },
+      { type: 'fitur', text: 'Halaman publik pengumuman: daftar pendaftar + status lolos + unduh SK' },
+      { type: 'fitur', text: 'Endpoint publik /api/pengumuman/[beasiswaId] untuk cek daftar pendaftar & yang lolos' },
+      { type: 'fitur', text: 'Menu admin "Rilis Pengumuman" (superadmin) + quick link dashboard' },
+      { type: 'perbaikan', text: 'Status lolos/gagal sembunyi dari mahasiswa sampai pengumuman rilis — tampil "Menunggu Pengumuman"' },
+      { type: 'perbaikan', text: 'Label status mahasiswa: Diterima→Lolos, Ditolak→Tidak Lolos (konsisten dengan halaman publik)' },
+      { type: 'hapus', text: 'Hapus fungsi pendaftaran akun mandiri: /register + /api/auth/register — login hanya untuk data yang sudah ada di D1' },
+      { type: 'hapus', text: 'Bersihkan data mahasiswa: sisakan 2 akun test (backup lengkap disimpan lokal, dump di-gitignore)' },
+    ]
+  },
+  {
+    version: '0.7.0',
+    date: '27 Agustus 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Login mahasiswa berubah: NIM + NIK (sebelumnya NIK + nama ibu kandung)' },
+      { type: 'fitur', text: 'Isi NIM mahasiswa: 237 data dari Data Pembuatan NIM SISKA 2026 (kolom users.nim + identitas_pribadi.nim)' },
+    ]
+  },
+  {
+    version: '0.6.0',
+    date: '16 Juli 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Tabel admins + admin_sessions terpisah dari users + sessions' },
+      { type: 'fitur', text: 'Halaman Pendaftar Beasiswa: filter per beasiswa + set status Lolos/Tidak Lolos' },
+      { type: 'fitur', text: 'Halaman Profil Admin: ubah nama & password sendiri' },
+      { type: 'fitur', text: 'Tombol Reset Password di halaman Pengaturan (superadmin)' },
+      { type: 'fitur', text: 'Perketat role admin: superadmin bebas, admin verifikator terbatas (Dashboard/Profil/Export), editor blog saja' },
+      { type: 'fitur', text: 'Dashboard quick links sesuai role admin yang login' },
+      { type: 'fitur', text: 'Halaman beasiswa: inline form toggle seperti blog' },
+      { type: 'perbaikan', text: 'Admin Profil Mahasiswa: tabel NIK, status summary cards, pagination 10/20/50, default filter pending' },
+      { type: 'perbaikan', text: 'Admin detail: label baku (RT/RW, Nama Lengkap, dll), format rupiah & jenis kelamin' },
+      { type: 'perbaikan', text: 'SPAN-PTKIN alignment: tambah field agama, jurusan, penerima PKH/KJP' },
+      { type: 'perbaikan', text: 'Material Icons: 61 icons verified, perbaiki icon tidak tampil' },
+    ]
+  },
+  {
+    version: '0.5.0',
+    date: '16 Juli 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Login mahasiswa pakai NIK + nama ibu kandung (ganti email+password)' },
+      { type: 'fitur', text: 'Register mahasiswa: 3 field — NIK, nama lengkap, nama ibu' },
+      { type: 'fitur', text: 'Dual login API: deteksi @ → admin (email+password) / mahasiswa (NIK+nama ibu)' },
+      { type: 'fitur', text: 'Layout konsisten 3-tier: PublicLayout, MahasiswaLayout, AdminLayout' },
+      { type: 'perbaikan', text: 'Shared DNA: gradient biru logo, backdrop-blur navbar, footer seragam' },
+      { type: 'perbaikan', text: 'Hapus navbar/footer inline di semua halaman — pakai layout terpusat' },
+    ]
+  },
+  {
+    version: '0.4.0',
+    date: '7 Juli 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Blog CMS via Google Docs: editor nulis di Google Docs → publish → export HTML ke D1' },
+      { type: 'fitur', text: 'Service account Google Drive: create doc di shared folder, auto-set permission' },
+      { type: 'fitur', text: 'Halaman blog publik: list artikel (filter kategori) + detail (preserve formatting)' },
+      { type: 'fitur', text: 'Material Symbols subset optimization (icon_names= parameter) — 60 icon bukan 3000' },
+      { type: 'perbaikan', text: 'Ganti "KIP Kuliah" jadi "Beasiswa IAIN Pontianak" di semua teks' },
+    ]
+  },
+  {
+    version: '0.3.2',
+    date: '7 Juli 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Profile-based architecture: data profil per-user (6 section, FK ke userId)' },
+      { type: 'fitur', text: 'Pendaftaran jadi lightweight junction: user ↔ beasiswa, 1-klik apply' },
+      { type: 'fitur', text: 'Profile status: incomplete → pending → verified/rejected' },
+      { type: 'fitur', text: 'Admin verifikasi profil mahasiswa (terima/tolak + catatan)' },
+      { type: 'perbaikan', text: 'Cleanup: drop tabel sesi_pendaftaran, migrasi data ke user profile' },
+    ]
+  },
+  {
+    version: '0.3.1',
+    date: '6 Juli 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Multi-beasiswa: admin CRUD beasiswa (nama, deskripsi, tanggal, aktif/nonaktif)' },
+      { type: 'fitur', text: 'Mahasiswa pilih beasiswa dari daftar → daftar per beasiswa dengan routing ?pid=X' },
+      { type: 'fitur', text: 'Admin dashboard + list: filter per beasiswa' },
+      { type: 'fitur', text: 'Export CSV 52 kolom data lengkap' },
+      { type: 'perbaikan', text: 'Form wizard link bawa pendaftaranId (multi-pendaftaran support)' },
+    ]
+  },
+  {
+    version: '0.3.0',
+    date: '6 Juli 2026',
+    status: 'Dalam Pengembangan',
+    changes: [
+      { type: 'fitur', text: 'Upload dokumen ke Google Drive (21 jenis file, Service Account auth)' },
+      { type: 'fitur', text: 'Komponen FileUploadBox: drag-drop, progress bar, preview, hapus' },
+      { type: 'fitur', text: 'Changelog page: riwayat perubahan platform' },
+      { type: 'perbaikan', text: 'Form wizard step 1-6: tambah section "Dokumen Pendukung"' },
+      { type: 'perbaikan', text: 'Deploy workflow: auto .assetsignore + wrangler.jsonc main field' },
+    ]
+  },
+  {
+    version: '0.2.0',
+    date: '5 Juli 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Form wizard 6 step (118 field sesuai referensi KIP Kuliah 2026)' },
+      { type: 'fitur', text: 'Admin dashboard: statistik, list pendaftaran, detail' },
+      { type: 'fitur', text: 'Review + submit final pendaftaran' },
+      { type: 'perbaikan', text: 'Downgrade @astrojs/cloudflare v14 → v12.6.13 (fix [object Object])' },
+      { type: 'perbaikan', text: 'Fix runtime access pattern (v12: Astro.locals.runtime.env)' },
+    ]
+  },
+  {
+    version: '0.1.0',
+    date: '5 Juli 2026',
+    status: 'Deployed',
+    changes: [
+      { type: 'fitur', text: 'Inisialisasi proyek: Astro 7 + Tailwind v4 + Alpine.js' },
+      { type: 'fitur', text: 'Database schema: 11 tabel Drizzle (D1)' },
+      { type: 'fitur', text: 'Auth system: register, login, logout (PBKDF2 100k iterasi)' },
+      { type: 'fitur', text: 'Landing page + form register + login' },
+      { type: 'fitur', text: 'Mahasiswa dashboard dengan status pendaftaran' },
+      { type: 'fitur', text: 'Deploy ke Cloudflare Workers' },
+    ]
+  },
+];
+
+const typeColors: Record<string, string> = {
+  fitur: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  perbaikan: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+  hapus: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+};
+
+const typeLabels: Record<string, string> = {
+  fitur: 'Fitur Baru',
+  perbaikan: 'Perbaikan',
+  hapus: 'Dihapus',
+};
+---
+
+<PublicLayout title="Changelog">
+  <div class="min-h-screen bg-gradient-to-b from-blue-50 to-white dark:from-slate-950 dark:to-slate-900">
+    <!-- Header -->
+    <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+      <div class="container mx-auto px-4 py-8">
+        <a href="/" class="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 mb-4">
+          <span class="material-symbols-outlined text-sm">arrow_back</span>
+          Kembali ke Beranda
+        </a>
+        <h1 class="text-3xl font-extrabold text-slate-900 dark:text-white">Changelog</h1>
+        <p class="text-slate-500 dark:text-slate-400 mt-1">Riwayat perubahan platform Beasiswa IAIN Pontianak</p>
+      </div>
+    </div>
+
+    <!-- Content -->
+    <div class="container mx-auto px-4 py-12 max-w-3xl">
+      <div class="space-y-12">
+        {updates.map((update) => (
+          <div class="relative pl-8 border-l-2 border-slate-200 dark:border-slate-700">
+            <!-- Timeline dot -->
+            <div class="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-blue-600 border-4 border-white dark:border-slate-950"></div>
+
+            <!-- Version header -->
+            <div class="mb-4">
+              <div class="flex items-center gap-3 flex-wrap">
+                <h2 class="text-xl font-bold text-slate-900 dark:text-white">v{update.version}</h2>
+                <span class="text-sm text-slate-500 dark:text-slate-400">{update.date}</span>
+                {update.status === 'Dalam Pengembangan' ? (
+                  <span class="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded-full">
+                    Dalam Pengembangan
+                  </span>
+                ) : (
+                  <span class="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 rounded-full">
+                    Deployed
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <!-- Changes -->
+            <div class="space-y-2">
+              {update.changes.map((change) => (
+                <div class="flex items-start gap-2">
+                  <span class:list={[
+                    "px-1.5 py-0.5 text-[10px] font-bold rounded mt-0.5 shrink-0",
+                    typeColors[change.type] || typeColors.fitur,
+                  ]}>
+                    {typeLabels[change.type] || change.type}
+                  </span>
+                  <p class="text-sm text-slate-700 dark:text-slate-300">{change.text}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <!-- Footer -->
+      <div class="mt-16 text-center text-sm text-slate-400 dark:text-slate-600">
+        <p>Platform Beasiswa IAIN Pontianak</p>
+        <p class="mt-1">Dikembangkan dengan Astro + Cloudflare Workers</p>
+      </div>
+    </div>
+  </div>
+</PublicLayout>

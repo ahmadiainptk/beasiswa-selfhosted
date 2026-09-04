@@ -1,0 +1,34 @@
+# Build output
+dist/
+.wrangler/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Local data
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local DB backups (PII — never commit)
+db-backup-*/
+
+# Local Gemini keys (never commit)
+.gemini_keys.local

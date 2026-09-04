@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+
+<html class="light" lang="id">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Admin Dashboard - Beasiswa IAIN Pontianak</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&amp;family=Inter:wght@400;500;600&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <!-- Tailwind Configuration -->
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-high": "#e7e8e9",
+                        "on-tertiary-container": "#b0dcc4",
+                        "tertiary-fixed-dim": "#a5d0b9",
+                        "secondary-container": "#fed65b",
+                        "on-secondary-container": "#745c00",
+                        "secondary-fixed-dim": "#e9c349",
+                        "on-secondary-fixed-variant": "#574500",
+                        "inverse-primary": "#83d99c",
+                        "outline-variant": "#bec9be",
+                        "primary-fixed": "#9ef6b6",
+                        "surface-variant": "#e1e3e4",
+                        "on-primary": "#ffffff",
+                        "primary-container": "#006837",
+                        "on-secondary": "#ffffff",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-container": "#3a624f",
+                        "primary-fixed-dim": "#83d99c",
+                        "on-tertiary-fixed": "#002114",
+                        "surface-container-highest": "#e1e3e4",
+                        "secondary-fixed": "#ffe088",
+                        "on-error": "#ffffff",
+                        "on-error-container": "#93000a",
+                        "surface-container": "#edeeef",
+                        "surface": "#f8f9fa",
+                        "on-primary-fixed-variant": "#00522a",
+                        "on-background": "#191c1d",
+                        "error": "#ba1a1a",
+                        "background": "#f8f9fa",
+                        "outline": "#6f7a70",
+                        "surface-dim": "#d9dadb",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-surface-variant": "#3f4940",
+                        "on-tertiary": "#ffffff",
+                        "on-tertiary-fixed-variant": "#274e3d",
+                        "on-primary-fixed": "#00210e",
+                        "error-container": "#ffdad6",
+                        "on-surface": "#191c1d",
+                        "surface-tint": "#0b6d3b",
+                        "tertiary": "#224a39",
+                        "secondary": "#735c00",
+                        "surface-container-low": "#f3f4f5",
+                        "on-primary-container": "#8ee4a6",
+                        "inverse-surface": "#2e3132",
+                        "tertiary-fixed": "#c1ecd4",
+                        "primary": "#004d27",
+                        "on-secondary-fixed": "#241a00",
+                        "surface-bright": "#f8f9fa"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "margin-mobile": "16px",
+                        "container-max": "1280px",
+                        "stack-sm": "8px",
+                        "stack-lg": "32px",
+                        "stack-md": "16px",
+                        "gutter": "24px",
+                        "section-gap": "80px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Montserrat"],
+                        "body-md": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "display-lg-mobile": ["Montserrat"],
+                        "label-md": ["Inter"],
+                        "display-lg": ["Montserrat"],
+                        "headline-sm": ["Montserrat"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["32px", { "lineHeight": "1.3", "fontWeight": "600" }],
+                        "body-md": ["16px", { "lineHeight": "1.5", "fontWeight": "400" }],
+                        "body-lg": ["18px", { "lineHeight": "1.6", "fontWeight": "400" }],
+                        "display-lg-mobile": ["32px", { "lineHeight": "1.2", "fontWeight": "700" }],
+                        "label-md": ["14px", { "lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600" }],
+                        "display-lg": ["48px", { "lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "headline-sm": ["24px", { "lineHeight": "1.4", "fontWeight": "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(233, 236, 239, 1);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #004d27;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body class="bg-surface text-on-surface font-body-md min-h-screen flex overflow-hidden">
+    <!-- Sidebar Navigation (Based on Shared Components JSON) -->
+    <aside
+        class="fixed left-0 top-0 h-full w-72 bg-surface-container-low dark:bg-surface-dim shadow-sm flex flex-col gap-stack-sm p-stack-md z-50">
+        <div class="mb-stack-lg px-4 flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary text-4xl"
+                data-icon="account_balance">account_balance</span>
+            <div>
+                <h1 class="font-headline-sm text-label-md text-primary leading-tight">Admin</h1>
+                <p class="text-[10px] uppercase tracking-widest text-on-surface-variant font-bold">Beasiswa IAIN</p>
+            </div>
+        </div>
+        <nav class="flex-1 flex flex-col gap-1">
+            <p class="px-4 text-[11px] font-bold text-on-surface-variant opacity-50 uppercase mb-2">Main Menu</p>
+            <a class="bg-secondary-container text-on-secondary-container rounded-full flex items-center gap-3 px-4 py-3 transition-all duration-150 scale-95"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+                <span class="font-label-md text-label-md">Dashboard</span>
+            </a>
+            <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-3 px-4 py-3 rounded-full transition-colors duration-200"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="verified_user">verified_user</span>
+                <span class="font-label-md text-label-md">Verifikasi Akun</span>
+            </a>
+            <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-3 px-4 py-3 rounded-full transition-colors duration-200"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="how_to_reg">how_to_reg</span>
+                <span class="font-label-md text-label-md">Seleksi Beasiswa</span>
+            </a>
+            <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-3 px-4 py-3 rounded-full transition-colors duration-200"
+                href="#">
+                <span class="material-symbols-outlined" data-icon="description">description</span>
+                <span class="font-label-md text-label-md">Laporan</span>
+            </a>
+            <div class="mt-auto flex flex-col gap-1">
+                <a class="text-on-surface-variant hover:bg-surface-container-high flex items-center gap-3 px-4 py-3 rounded-full transition-colors duration-200"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="settings">settings</span>
+                    <span class="font-label-md text-label-md">Pengaturan</span>
+                </a>
+                <a class="text-error hover:bg-error-container/20 flex items-center gap-3 px-4 py-3 rounded-full transition-colors duration-200"
+                    href="#">
+                    <span class="material-symbols-outlined" data-icon="logout">logout</span>
+                    <span class="font-label-md text-label-md">Keluar</span>
+                </a>
+            </div>
+        </nav>
+    </aside>
+    <!-- Main Content Canvas -->
+    <main class="ml-72 flex-1 h-screen overflow-y-auto custom-scrollbar bg-surface-bright flex flex-col">
+        <!-- TopAppBar (Based on Shared Components JSON) -->
+        <header
+            class="sticky top-0 z-40 bg-surface flex justify-between items-center px-gutter w-full h-16 border-b border-outline-variant/30">
+            <h2 class="font-headline-sm text-headline-sm text-primary">Dashboard Admin - Panel Pengelola</h2>
+            <div class="flex items-center gap-stack-md">
+                <div class="flex items-center gap-3 pr-stack-md border-r border-outline-variant/50">
+                    <span
+                        class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors"
+                        data-icon="notifications">notifications</span>
+                    <span
+                        class="material-symbols-outlined text-on-surface-variant cursor-pointer hover:text-primary transition-colors"
+                        data-icon="chat_bubble">chat_bubble</span>
+                </div>
+                <div class="flex items-center gap-3 pl-2">
+                    <div class="text-right hidden md:block">
+                        <p class="font-label-md text-label-md text-on-surface">Dr. Ahmad Faisal</p>
+                        <p class="text-[10px] text-on-surface-variant">Administrator Utama</p>
+                    </div>
+                    <img class="w-10 h-10 rounded-full border-2 border-primary object-cover"
+                        data-alt="A professional headshot of a middle-aged academic administrator with a warm smile, wearing a formal batik shirt in a bright, modern office setting. The lighting is soft and professional, emphasizing a clean and authoritative executive presence within the IAIN Pontianak campus environment."
+                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuCqQfOCtBmeIbPLijmJxdO37V2pbq63pJ2ifOWAZTZC4nnzlgQzLZQYYjIi4OokUsvLU33RHhsSAhk4p1ameBmClrT8TkeDumZcx4JNiWLANcihO-2oBGtfBJW3iK74Q87Yhrwq5LFSmgvUsYOwoztYEUUuo5j9cSwp_lTRiHRcAfzxtIEjRRbACFVqcZd4KSPSlthZ_NxsqiLwNGV0GQ6q_iiXSkSt_ruq8Dmuct4WiYhie-xHNEZjag" />
+                </div>
+            </div>
+        </header>
+        <!-- Content Area -->
+        <div class="p-gutter flex flex-col gap-stack-lg">
+            <!-- Statistics Cards - Bento Layout -->
+            <section class="grid grid-cols-1 md:grid-cols-4 gap-gutter">
+                <div
+                    class="glass-card p-stack-md rounded-xl flex flex-col gap-2 hover:border-primary transition-all group">
+                    <div class="flex justify-between items-start">
+                        <div class="p-2 rounded-lg bg-primary/10 text-primary">
+                            <span class="material-symbols-outlined" data-icon="groups">groups</span>
+                        </div>
+                        <span class="text-[10px] font-bold text-primary px-2 py-1 bg-primary/5 rounded-full">+12%</span>
+                    </div>
+                    <p class="text-on-surface-variant text-label-md">Total Pendaftar</p>
+                    <h3 class="text-headline-sm font-headline-sm">1,248</h3>
+                </div>
+                <div class="glass-card p-stack-md rounded-xl flex flex-col gap-2 hover:border-secondary transition-all">
+                    <div class="flex justify-between items-start">
+                        <div class="p-2 rounded-lg bg-secondary-container/20 text-secondary">
+                            <span class="material-symbols-outlined" data-icon="pending_actions">pending_actions</span>
+                        </div>
+                        <span
+                            class="text-[10px] font-bold text-error px-2 py-1 bg-error-container/20 rounded-full">High</span>
+                    </div>
+                    <p class="text-on-surface-variant text-label-md">Akun Perlu Verifikasi</p>
+                    <h3 class="text-headline-sm font-headline-sm">42</h3>
+                </div>
+                <div class="glass-card p-stack-md rounded-xl flex flex-col gap-2 hover:border-tertiary transition-all">
+                    <div class="flex justify-between items-start">
+                        <div class="p-2 rounded-lg bg-tertiary-container/10 text-tertiary">
+                            <span class="material-symbols-outlined" data-icon="fact_check">fact_check</span>
+                        </div>
+                        <span
+                            class="text-[10px] font-bold text-tertiary px-2 py-1 bg-tertiary/5 rounded-full">Processing</span>
+                    </div>
+                    <p class="text-on-surface-variant text-label-md">Berkas Diproses</p>
+                    <h3 class="text-headline-sm font-headline-sm">856</h3>
+                </div>
+                <div class="glass-card p-stack-md rounded-xl flex flex-col gap-2 hover:border-primary transition-all">
+                    <div class="flex justify-between items-start">
+                        <div class="p-2 rounded-lg bg-primary-container text-on-primary-container">
+                            <span class="material-symbols-outlined"
+                                data-icon="workspace_premium">workspace_premium</span>
+                        </div>
+                        <span class="text-[10px] font-bold text-primary px-2 py-1 bg-primary/5 rounded-full">Target
+                            90%</span>
+                    </div>
+                    <p class="text-on-surface-variant text-label-md">Total Lulus Seleksi</p>
+                    <h3 class="text-headline-sm font-headline-sm">312</h3>
+                </div>
+            </section>
+            <!-- Main Content Sections -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+                <!-- Section 1: Verifikasi Akun (Large Column) -->
+                <section class="lg:col-span-2 flex flex-col gap-stack-md">
+                    <div class="flex justify-between items-end px-2">
+                        <div>
+                            <h3 class="font-headline-sm text-headline-sm text-primary">Verifikasi Akun Mahasiswa</h3>
+                            <p class="text-on-surface-variant text-body-md">Permintaan verifikasi akun terbaru yang
+                                memerlukan tindakan.</p>
+                        </div>
+                        <button
+                            class="text-primary font-label-md text-label-md flex items-center gap-1 hover:underline">
+                            Lihat Semua <span class="material-symbols-outlined text-sm"
+                                data-icon="arrow_forward">arrow_forward</span>
+                        </button>
+                    </div>
+                    <div class="glass-card rounded-xl overflow-hidden">
+                        <table class="w-full text-left border-collapse">
+                            <thead class="bg-surface-container-low border-b border-outline-variant">
+                                <tr>
+                                    <th class="px-gutter py-4 font-label-md text-label-md text-on-surface-variant">
+                                        Mahasiswa</th>
+                                    <th class="px-gutter py-4 font-label-md text-label-md text-on-surface-variant">NIM
+                                    </th>
+                                    <th class="px-gutter py-4 font-label-md text-label-md text-on-surface-variant">Tgl
+                                        Daftar</th>
+                                    <th
+                                        class="px-gutter py-4 font-label-md text-label-md text-on-surface-variant text-center">
+                                        Berkas</th>
+                                    <th
+                                        class="px-gutter py-4 font-label-md text-label-md text-on-surface-variant text-right">
+                                        Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-outline-variant/30">
+                                <tr class="hover:bg-surface-container-lowest transition-colors">
+                                    <td class="px-gutter py-4 flex items-center gap-3">
+                                        <div
+                                            class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+                                            RM</div>
+                                        <div>
+                                            <p class="font-bold text-on-surface">Riza Maulana</p>
+                                            <p class="text-xs text-on-surface-variant">Ekonomi Syariah</p>
+                                        </div>
+                                    </td>
+                                    <td class="px-gutter py-4 text-on-surface-variant text-body-md">12011034</td>
+                                    <td class="px-gutter py-4 text-on-surface-variant text-body-md">24 Okt 2023</td>
+                                    <td class="px-gutter py-4 text-center">
+                                        <button
+                                            class="p-2 rounded-lg bg-surface-container hover:bg-primary/10 hover:text-primary transition-all text-on-surface-variant">
+                                            <span class="material-symbols-outlined"
+                                                data-icon="visibility">visibility</span>
+                                        </button>
+                                    </td>
+                                    <td class="px-gutter py-4 text-right">
+                                        <div class="flex justify-end gap-2">
+                                            <button
+                                                class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">Setuju</button>
+                                            <button
+                                                class="px-3 py-1.5 border border-error text-error rounded-lg text-xs font-bold hover:bg-error-container/10 transition-colors">Tolak</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-surface-container-lowest transition-colors">
+                                    <td class="px-gutter py-4 flex items-center gap-3">
+                                        <div
+                                            class="w-8 h-8 rounded-full bg-secondary-container/20 flex items-center justify-center text-secondary font-bold text-xs">
+                                            SN</div>
+                                        <div>
+                                            <p class="font-bold text-on-surface">Siti Nurhaliza</p>
+                                            <p class="text-xs text-on-surface-variant">Pendidikan Agama Islam</p>
+                                        </div>
+                                    </td>
+                                    <td class="px-gutter py-4 text-on-surface-variant text-body-md">12011088</td>
+                                    <td class="px-gutter py-4 text-on-surface-variant text-body-md">25 Okt 2023</td>
+                                    <td class="px-gutter py-4 text-center">
+                                        <button
+                                            class="p-2 rounded-lg bg-surface-container hover:bg-primary/10 hover:text-primary transition-all text-on-surface-variant">
+                                            <span class="material-symbols-outlined"
+                                                data-icon="visibility">visibility</span>
+                                        </button>
+                                    </td>
+                                    <td class="px-gutter py-4 text-right">
+                                        <div class="flex justify-end gap-2">
+                                            <button
+                                                class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">Setuju</button>
+                                            <button
+                                                class="px-3 py-1.5 border border-error text-error rounded-lg text-xs font-bold hover:bg-error-container/10 transition-colors">Tolak</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr class="hover:bg-surface-container-lowest transition-colors">
+                                    <td class="px-gutter py-4 flex items-center gap-3">
+                                        <div
+                                            class="w-8 h-8 rounded-full bg-tertiary-container/10 flex items-center justify-center text-tertiary font-bold text-xs">
+                                            AF</div>
+                                        <div>
+                                            <p class="font-bold text-on-surface">Achmad Farhan</p>
+                                            <p class="text-xs text-on-surface-variant">Hukum Keluarga Islam</p>
+                                        </div>
+                                    </td>
+                                    <td class="px-gutter py-4 text-on-surface-variant text-body-md">12012111</td>
+                                    <td class="px-gutter py-4 text-on-surface-variant text-body-md">25 Okt 2023</td>
+                                    <td class="px-gutter py-4 text-center">
+                                        <button
+                                            class="p-2 rounded-lg bg-surface-container hover:bg-primary/10 hover:text-primary transition-all text-on-surface-variant">
+                                            <span class="material-symbols-outlined"
+                                                data-icon="visibility">visibility</span>
+                                        </button>
+                                    </td>
+                                    <td class="px-gutter py-4 text-right">
+                                        <div class="flex justify-end gap-2">
+                                            <button
+                                                class="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity">Setuju</button>
+                                            <button
+                                                class="px-3 py-1.5 border border-error text-error rounded-lg text-xs font-bold hover:bg-error-container/10 transition-colors">Tolak</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                <!-- Section 2: Kelulusan Pendaftaran Beasiswa (Sidebar Column) -->
+                <section class="flex flex-col gap-stack-md">
+                    <div class="px-2">
+                        <h3 class="font-headline-sm text-headline-sm text-primary">Status Kelulusan</h3>
+                        <p class="text-on-surface-variant text-body-md">Manajemen kelulusan akhir.</p>
+                    </div>
+                    <div class="glass-card rounded-xl p-stack-md flex flex-col gap-stack-md">
+                        <div class="flex flex-col gap-2">
+                            <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Jenis
+                                Beasiswa</label>
+                            <select
+                                class="w-full bg-surface border border-outline-variant rounded-lg p-2.5 focus:ring-1 focus:ring-primary focus:border-primary outline-none">
+                                <option>KIP-Kuliah 2024</option>
+                                <option>Beasiswa Prestasi</option>
+                                <option>Beasiswa Tahfidz</option>
+                            </select>
+                        </div>
+                        <div class="flex flex-col gap-2">
+                            <label class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Filter
+                                Tahapan</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button
+                                    class="px-3 py-2 bg-primary/5 text-primary border border-primary/20 rounded-lg text-xs font-medium">Wawancara</button>
+                                <button
+                                    class="px-3 py-2 bg-surface text-on-surface-variant border border-outline-variant rounded-lg text-xs font-medium">Pemberkasan</button>
+                            </div>
+                        </div>
+                        <hr class="border-outline-variant/30" />
+                        <div class="flex flex-col gap-3">
+                            <p class="text-sm font-medium text-on-surface flex items-center justify-between">
+                                Kandidat Terseleksi <span
+                                    class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded text-xs">128
+                                    Mahasiswa</span>
+                            </p>
+                            <div class="flex flex-col gap-2 max-h-48 overflow-y-auto pr-2 custom-scrollbar">
+                                <div
+                                    class="flex items-center gap-3 p-2 hover:bg-surface-container rounded-lg group transition-colors">
+                                    <input class="rounded border-outline-variant text-primary focus:ring-primary"
+                                        type="checkbox" />
+                                    <div class="flex-1">
+                                        <p class="text-xs font-bold truncate">Diana Putri</p>
+                                        <p class="text-[10px] text-on-surface-variant">IPK: 3.92</p>
+                                    </div>
+                                    <span
+                                        class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                        data-icon="open_in_new">open_in_new</span>
+                                </div>
+                                <div
+                                    class="flex items-center gap-3 p-2 hover:bg-surface-container rounded-lg group transition-colors">
+                                    <input class="rounded border-outline-variant text-primary focus:ring-primary"
+                                        type="checkbox" />
+                                    <div class="flex-1">
+                                        <p class="text-xs font-bold truncate">Budi Santoso</p>
+                                        <p class="text-[10px] text-on-surface-variant">IPK: 3.75</p>
+                                    </div>
+                                    <span
+                                        class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                        data-icon="open_in_new">open_in_new</span>
+                                </div>
+                                <div
+                                    class="flex items-center gap-3 p-2 hover:bg-surface-container rounded-lg group transition-colors">
+                                    <input class="rounded border-outline-variant text-primary focus:ring-primary"
+                                        type="checkbox" />
+                                    <div class="flex-1">
+                                        <p class="text-xs font-bold truncate">Ahmad Subandi</p>
+                                        <p class="text-[10px] text-on-surface-variant">IPK: 3.88</p>
+                                    </div>
+                                    <span
+                                        class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                                        data-icon="open_in_new">open_in_new</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-4 flex flex-col gap-2">
+                            <button
+                                class="w-full py-3 bg-primary text-white font-bold rounded-lg flex items-center justify-center gap-2 hover:shadow-lg hover:shadow-primary/20 transition-all active:scale-95">
+                                <span class="material-symbols-outlined text-sm"
+                                    data-icon="check_circle">check_circle</span>
+                                Tetapkan Lulus (Batch)
+                            </button>
+                            <button
+                                class="w-full py-3 border border-outline text-on-surface-variant font-bold rounded-lg flex items-center justify-center gap-2 hover:bg-surface-container-high transition-all active:scale-95">
+                                <span class="material-symbols-outlined text-sm" data-icon="cancel">cancel</span>
+                                Tidak Lulus
+                            </button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <!-- Quick Insights / Chart Section -->
+            <section class="glass-card rounded-xl p-stack-md mb-stack-lg">
+                <div class="flex justify-between items-center mb-stack-md">
+                    <h3 class="font-headline-sm text-headline-sm text-primary">Statistik Pendaftar Mingguan</h3>
+                    <div class="flex gap-2">
+                        <span class="flex items-center gap-1 text-xs font-medium text-on-surface-variant"><span
+                                class="w-2 h-2 rounded-full bg-primary"></span> Terverifikasi</span>
+                        <span class="flex items-center gap-1 text-xs font-medium text-on-surface-variant"><span
+                                class="w-2 h-2 rounded-full bg-secondary-container"></span> Belum Verifikasi</span>
+                    </div>
+                </div>
+                <div class="h-48 w-full flex items-end justify-between gap-4 px-4 pt-4">
+                    <div class="flex-1 flex flex-col items-center gap-2 group">
+                        <div class="w-full bg-surface-container-high rounded-t-lg relative flex flex-col justify-end overflow-hidden"
+                            style="height: 100px;">
+                            <div class="bg-secondary-container w-full" style="height: 40%;"></div>
+                            <div class="bg-primary w-full" style="height: 60%;"></div>
+                        </div>
+                        <span class="text-[10px] font-bold text-on-surface-variant">Sen</span>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center gap-2 group">
+                        <div class="w-full bg-surface-container-high rounded-t-lg relative flex flex-col justify-end overflow-hidden"
+                            style="height: 100px;">
+                            <div class="bg-secondary-container w-full" style="height: 30%;"></div>
+                            <div class="bg-primary w-full" style="height: 70%;"></div>
+                        </div>
+                        <span class="text-[10px] font-bold text-on-surface-variant">Sel</span>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center gap-2 group">
+                        <div class="w-full bg-surface-container-high rounded-t-lg relative flex flex-col justify-end overflow-hidden"
+                            style="height: 100px;">
+                            <div class="bg-secondary-container w-full" style="height: 20%;"></div>
+                            <div class="bg-primary w-full" style="height: 80%;"></div>
+                        </div>
+                        <span class="text-[10px] font-bold text-on-surface-variant">Rab</span>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center gap-2 group">
+                        <div class="w-full bg-surface-container-high rounded-t-lg relative flex flex-col justify-end overflow-hidden"
+                            style="height: 100px;">
+                            <div class="bg-secondary-container w-full" style="height: 50%;"></div>
+                            <div class="bg-primary w-full" style="height: 50%;"></div>
+                        </div>
+                        <span class="text-[10px] font-bold text-on-surface-variant">Kam</span>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center gap-2 group">
+                        <div class="w-full bg-surface-container-high rounded-t-lg relative flex flex-col justify-end overflow-hidden"
+                            style="height: 100px;">
+                            <div class="bg-secondary-container w-full" style="height: 15%;"></div>
+                            <div class="bg-primary w-full" style="height: 85%;"></div>
+                        </div>
+                        <span class="text-[10px] font-bold text-on-surface-variant">Jum</span>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center gap-2 group">
+                        <div class="w-full bg-surface-container-high rounded-t-lg relative flex flex-col justify-end overflow-hidden"
+                            style="height: 100px;">
+                            <div class="bg-secondary-container w-full" style="height: 10%;"></div>
+                            <div class="bg-primary w-full" style="height: 90%;"></div>
+                        </div>
+                        <span class="text-[10px] font-bold text-on-surface-variant">Sab</span>
+                    </div>
+                    <div class="flex-1 flex flex-col items-center gap-2 group">
+                        <div class="w-full bg-surface-container-high rounded-t-lg relative flex flex-col justify-end overflow-hidden"
+                            style="height: 100px;">
+                            <div class="bg-secondary-container w-full" style="height: 5%;"></div>
+                            <div class="bg-primary w-full" style="height: 95%;"></div>
+                        </div>
+                        <span class="text-[10px] font-bold text-on-surface-variant">Min</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+        <!-- Footer (Based on Shared Components JSON) -->
+        <footer class="mt-auto w-full bg-primary dark:bg-primary-container">
+            <div
+                class="flex flex-col md:flex-row justify-between items-center py-stack-md px-gutter max-w-container-max mx-auto gap-stack-md">
+                <p class="font-body-md text-body-md text-on-primary/80">© 2024 IAIN Pontianak. All Rights Reserved.</p>
+                <div class="flex gap-stack-md">
+                    <a class="text-on-primary/80 hover:text-secondary-fixed transition-colors text-xs"
+                        href="#">Kebijakan Privasi</a>
+                    <a class="text-on-primary/80 hover:text-secondary-fixed transition-colors text-xs" href="#">Syarat
+                        &amp; Ketentuan</a>
+                    <a class="text-on-primary/80 hover:text-secondary-fixed transition-colors text-xs" href="#">Hubungi
+                        Kami</a>
+                </div>
+            </div>
+        </footer>
+    </main>
+    <!-- Micro-interactions Script -->
+    <script>
+        document.querySelectorAll('a, button').forEach(el => {
+            el.addEventListener('click', function (e) {
+                // Add ripple or small bounce effect logic here if needed
+                if (this.tagName === 'BUTTON') {
+                    this.classList.add('scale-95');
+                    setTimeout(() => this.classList.remove('scale-95'), 100);
+                }
+            });
+        });
+
+        // Simple table hover interaction
+        const rows = document.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.style.transform = 'translateX(4px)';
+            });
+            row.addEventListener('mouseleave', () => {
+                row.style.transform = 'translateX(0px)';
+            });
+            row.style.transition = 'transform 0.2s ease-out';
+        });
+    </script>
+</body>
+
+</html>

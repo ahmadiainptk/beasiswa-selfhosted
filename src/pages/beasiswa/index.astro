@@ -1,0 +1,45 @@
+---
+// path: src/pages/beasiswa/index.astro
+import PublicLayout from "../../layouts/PublicLayout.astro";
+import { drizzle } from "drizzle-orm/d1";
+import { eq } from "drizzle-orm";
+import * as schema from "../../db/schema";
+import { beasiswa as beasiswaTable } from "../../db/schema";
+
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+const allBeasiswa = await db.select().from(beasiswaTable).where(eq(beasiswaTable.aktif, 1)).orderBy(beasiswaTable.id);
+---
+
+<PublicLayout title="Program Beasiswa">
+  <main class="max-w-[1280px] mx-auto px-gutter py-16">
+    <div class="mb-10">
+      <h1 class="text-3xl font-extrabold font-[Montserrat] text-on-surface">Program Beasiswa</h1>
+      <p class="text-outline mt-2">Jelajahi program beasiswa yang tersedia di IAIN Pontianak</p>
+    </div>
+
+    {allBeasiswa.length === 0 ? (
+      <div class="text-center py-16">
+        <span class="material-symbols-outlined text-6xl text-outline-variant mb-4">school</span>
+        <p class="text-outline">Belum ada program beasiswa yang aktif.</p>
+      </div>
+    ) : (
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {allBeasiswa.map((b) => (
+          <a href={`/beasiswa/${b.id}`} class="block group bg-surface-container-lowest rounded-xl border border-outline-variant hover:border-primary hover:shadow-lg transition-all p-6">
+            <div class="flex items-start gap-3 mb-3">
+              <span class="material-symbols-outlined text-3xl text-primary">school</span>
+              <div>
+                <h3 class="text-lg font-bold font-[Montserrat] text-on-surface group-hover:text-primary transition-colors">{b.nama}</h3>
+                {b.deskripsi && <p class="text-sm text-outline mt-1 line-clamp-2">{b.deskripsi}</p>}
+              </div>
+            </div>
+            <div class="flex items-center gap-4 text-xs text-outline mt-4 pt-4 border-t border-outline-variant">
+              {b.dibukaPada && <span>Dibuka: {new Date(b.dibukaPada).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+              {b.ditutupPada && <span>Ditutup: {new Date(b.ditutupPada).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>}
+            </div>
+          </a>
+        ))}
+      </div>
+    )}
+  </main>
+</PublicLayout>

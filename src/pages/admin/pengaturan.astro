@@ -1,0 +1,163 @@
+---
+// path: src/pages/admin/pengaturan.astro
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Card from '../../components/ui/Card.astro';
+import { drizzle } from 'drizzle-orm/d1';
+import { eq } from 'drizzle-orm';
+import * as schema from '../../db/schema';
+import { admins } from '../../db/schema';
+import { verifyGardaToken } from "../../lib/auth";
+
+// GARDA SSO
+const gardaAdmin = await verifyGardaToken(
+  (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
+  Astro.locals.runtime?.env as any
+);
+if (!gardaAdmin) return Astro.redirect("/admin/login");
+
+const admin = { namaLengkap: gardaAdmin.name, email: gardaAdmin.email, role: gardaAdmin.role };
+
+// Load admin list (server-side)
+const db = drizzle(Astro.locals.runtime.env?.DB, { schema });
+const allAdmins = admin.role === 'superadmin' ? await db.select({
+  id: admins.id, email: admins.email, namaLengkap: admins.namaLengkap,
+  role: admins.role, createdAt: admins.createdAt,
+}).from(admins).orderBy(admins.id) : [];
+---
+
+<AdminLayout title="Pengaturan" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="pengaturan">
+  <div class="mb-6">
+    <h1 class="text-2xl font-extrabold text-on-surface">Pengaturan</h1>
+    <p class="text-outline mt-1">Kelola akun admin — login via GARDA SSO</p>
+  </div>
+
+  {admin.role === 'superadmin' ? (
+    <div class="space-y-6">
+      <!-- Add Admin -->
+      <Card title="Tambah Admin">
+        <form id="add-admin-form" class="flex flex-col sm:flex-row gap-3 items-end">
+          <div class="flex-1">
+            <label class="block text-sm font-medium text-on-surface-variant mb-1">Email Google</label>
+            <input type="email" name="email" required placeholder="admin@iainptk.ac.id"
+              class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none" />
+          </div>
+          <div class="w-40">
+            <label class="block text-sm font-medium text-on-surface-variant mb-1">Role</label>
+            <select name="role"
+              class="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface text-sm focus:ring-2 focus:ring-primary outline-none">
+              <option value="admin">Admin</option>
+              <option value="editor">Editor</option>
+            </select>
+          </div>
+          <button type="submit" class="px-4 py-2 bg-primary hover:bg-primary text-white text-sm font-medium rounded-lg transition flex items-center gap-2">
+            <span class="material-symbols-outlined text-lg">person_add</span>
+            Tambah
+          </button>
+        </form>
+        <div id="add-result" class="hidden mt-3"></div>
+      </Card>
+
+      <!-- Admin List -->
+      <Card title="Daftar Admin">
+        <p class="text-xs text-outline mb-4">Admin login menggunakan akun Google via GARDA SSO.</p>
+        <div class="space-y-2">
+          {allAdmins.map((a) => (
+            <div class="flex items-center justify-between p-3 bg-surface-container-lowest rounded-lg">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center">
+                  <span class="material-symbols-outlined text-primary text-lg">person</span>
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-on-surface">{a.namaLengkap}</p>
+                  <p class="text-xs text-outline">{a.email}</p>
+                  {a.role === 'superadmin' ? (
+                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] rounded-full font-medium bg-secondary-container text-on-secondary-container">Superadmin</span>
+                  ) : a.role === 'admin' ? (
+                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] rounded-full font-medium bg-primary-container text-on-primary-container">Admin — Verifikasi</span>
+                  ) : (
+                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] rounded-full font-medium bg-primary-container text-on-primary-container">Editor — Blog</span>
+                  )}
+                </div>
+              </div>
+              {a.role !== 'superadmin' && a.email !== admin.email ? (
+                <button onclick={`deleteAdmin(${a.id}, '${a.namaLengkap}')`}
+                  class="px-3 py-1.5 text-xs text-error hover:bg-error-container rounded-lg font-medium transition flex items-center gap-1">
+                  <span class="material-symbols-outlined text-sm">delete</span>
+                  Hapus
+                </button>
+              ) : (
+                <span class="px-2 py-1 text-xs text-outline bg-surface-container-high rounded font-medium">
+                  {a.email === admin.email ? 'Anda' : 'Superadmin'}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </div>
+  ) : (
+    <Card>
+      <div class="text-center py-8">
+        <span class="material-symbols-outlined text-6xl text-outline-variant mb-4">lock</span>
+        <h3 class="text-lg font-semibold text-on-surface-variant">Akses Terbatas</h3>
+        <p class="text-outline mt-1">Hanya superadmin yang bisa mengelola admin</p>
+      </div>
+    </Card>
+  )}
+
+  <script>
+    // Add admin
+    var addForm = document.getElementById('add-admin-form');
+    var addResult = document.getElementById('add-result');
+
+    if (addForm) {
+      addForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        var fd = new FormData(addForm);
+        try {
+          var res = await fetch('/api/admin/manage-admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'add',
+              email: fd.get('email'),
+              role: fd.get('role'),
+            }),
+          });
+          var data = await res.json();
+          addResult.classList.remove('hidden');
+          if (data.success) {
+            addResult.innerHTML = '<p class="text-sm text-primary">' + data.message + '</p>';
+            addForm.reset();
+            window.location.reload();
+          } else {
+            addResult.innerHTML = '<p class="text-sm text-error">' + data.message + '</p>';
+          }
+        } catch (err) {
+          addResult.classList.remove('hidden');
+          addResult.innerHTML = '<p class="text-sm text-error">Terjadi kesalahan</p>';
+        }
+      });
+    }
+
+    // Delete admin
+    window.deleteAdmin = async function(userId, name) {
+      if (!confirm(`Hapus admin "${name}"?`)) return;
+      try {
+        const res = await fetch('/api/admin/manage-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'delete', user_id: userId }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.reload();
+        } else {
+          alert(data.message);
+        }
+      } catch (err) {
+        alert('Terjadi kesalahan');
+      }
+    };
+  </script>
+</AdminLayout>
