@@ -150,6 +150,7 @@ export const prestasiTahfidz = sqliteTable('prestasi_tahfidz', {
   tingkatLomba: text('tingkat_lomba'),
   predikatJuara: text('predikat_juara'),
   jumlahJuzz: integer('jumlah_juzz'), // 5/10/15/20/25/30
+  prestasiList: text('prestasi_list'), // JSON array [{namaLomba,jenisLomba,tingkatLomba,predikatJuara},...] — banyak prestasi
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

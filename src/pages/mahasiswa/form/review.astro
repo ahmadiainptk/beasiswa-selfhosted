@@ -6,8 +6,10 @@ import Card from '../../../components/ui/Card.astro';
 import { drizzle } from 'drizzle-orm/d1';
 import { eq } from 'drizzle-orm';
 import * as schema from '../../../db/schema';
-import { sessions, users, identitasPribadi, riwayatPendidikan, prestasiTahfidz, identitasKeluarga, kondisiRumah, domisiliOrtu, kebutuhanKhusus } from '../../../db/schema';
+import { sessions, users, identitasPribadi, riwayatPendidikan, prestasiTahfidz, identitasKeluarga, kondisiRumah, domisiliOrtu, kebutuhanKhusus, dokumen } from '../../../db/schema';
 import { getCookieName } from '../../../lib/auth';
+import { formatLabel, formatValue, formatSectionValue, PRESTASI_KEYS, parsePrestasiList, missingKeysForSection } from '../../../lib/field-display';
+import { docLabel, BAGIAN_SECTION } from '../../../lib/doc-labels';
 
 // Auth check
 const token = Astro.cookies.get(getCookieName())?.value;
@@ -48,8 +50,25 @@ const sections = [
   { title: '7. Kebutuhan Khusus', data: s7[0] || null, href: '/mahasiswa/form/7' },
 ];
 
+// Fetch uploaded documents for the student & group them by form section (bagian),
+// so each step shows its own documents (matches the admin detail view).
+const docs = await db.select().from(dokumen).where(eq(dokumen.userId, user.id));
+const docsByNum = new Map<number, typeof docs>();
+for (const d of docs) {
+  const num = BAGIAN_SECTION[d.bagian]?.num;
+  if (!num) continue;
+  if (!docsByNum.has(num)) docsByNum.set(num, []);
+  docsByNum.get(num)!.push(d);
+}
+
 const canSubmit = user.profileStatus === 'incomplete' || user.profileStatus === 'rejected';
 const isSubmitted = user.profileStatus === 'pending' || user.profileStatus === 'verified';
+
+// Validasi kolom wajib per section — kolom yang belum terisi akan tampil MERAH & submit disabled.
+const missingBySection = sections.map((sec, i) => missingKeysForSection(sec.data, i));
+const totalMissing = missingBySection.reduce((sum, arr) => sum + arr.length, 0);
+const missingSet = new Set<string>();
+missingBySection.forEach((arr) => arr.forEach((k) => missingSet.add(k)));
 ---
 
 <MahasiswaLayout title="Review Profil" namaUser={user.namaLengkap}>
@@ -58,8 +77,22 @@ const isSubmitted = user.profileStatus === 'pending' || user.profileStatus === '
     <p class="text-outline mt-1">Periksa semua data sebelum submit untuk verifikasi</p>
   </div>
 
+  {totalMissing > 0 && (
+    <div class="mb-6 p-4 bg-error-container rounded-lg border border-error/40 flex items-start gap-3">
+      <span class="material-symbols-outlined text-error mt-0.5">error</span>
+      <div>
+        <p class="text-sm font-semibold text-error">
+          Masih ada {totalMissing} kolom wajib yang belum diisi.
+        </p>
+        <p class="text-xs text-error mt-0.5">
+          Bagian berwarna merah di bawah harus diisi dulu (klik Edit pada bagian terkait) sebelum submit.
+        </p>
+      </div>
+    </div>
+  )}
+
   <div class="space-y-6">
-    {sections.map((section) => (
+    {sections.map((section, idx) => (
       <Card>
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-semibold text-on-surface">{section.title}</h3>
@@ -68,21 +101,81 @@ const isSubmitted = user.profileStatus === 'pending' || user.profileStatus === '
             Edit
           </a>
         </div>
+        {(() => {
+          const prestasi = parsePrestasiList(section.data);
+          if (prestasi.length > 0) {
+            return (
+              <div class="mb-4">
+                <h4 class="text-sm font-semibold text-on-surface mb-2 flex items-center gap-1.5">
+                  <span class="material-symbols-outlined text-outline-variant">emoji_events</span>
+                  Prestasi ({prestasi.length})
+                </h4>
+                <div class="space-y-2">
+                  {prestasi.map((it, i) => (
+                    <div class="text-sm p-3 bg-surface-container-lowest rounded-lg border border-outline-variant">
+                      <div class="flex items-center justify-between gap-2">
+                        <span class="text-on-surface font-medium">{it.namaLomba || '-'}</span>
+                        <span class="text-outline text-xs shrink-0">#{i + 1}</span>
+                      </div>
+                      <div class="text-xs text-outline mt-1">
+                        {[it.jenisLomba, it.tingkatLomba, it.predikatJuara].filter(Boolean).join(' · ') || '-'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
         {section.data ? (
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {Object.entries(section.data)
-              .filter(([key]) => !['id', 'userId', 'createdAt', 'updatedAt'].includes(key))
-              .map(([key, value]) => (
-                <div class="text-sm">
-                  <span class="text-outline">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
-                  <span class="ml-1 text-on-surface font-medium">{value || '-'}</span>
-                </div>
-              ))
+              .filter(([key]) => !['id', 'userId', 'createdAt', 'updatedAt'].includes(key) && !PRESTASI_KEYS.has(key))
+              .map(([key, value]) => {
+                const isMissing = missingSet.has(key);
+                return (
+                  <div class="text-sm">
+                    <span class={isMissing ? 'text-error font-medium' : 'text-outline'}>{formatLabel(key)}:</span>
+                    <span class={isMissing ? 'ml-1 text-error font-medium' : 'ml-1 text-on-surface font-medium'}>{formatSectionValue(key, value, section.data)}</span>
+                    {isMissing && <span class="ml-1 text-[10px] text-error font-medium">(wajib belum diisi)</span>}
+                  </div>
+                );
+              })
             }
           </div>
         ) : (
-          <p class="text-sm text-outline italic">Belum diisi</p>
+          <p class="text-sm text-error italic font-medium">Belum diisi — kolom wajib belum lengkap</p>
         )}
+        {(() => {
+          const secDocs = docsByNum.get(idx + 1);
+          if (!secDocs || secDocs.length === 0) return null;
+          return (
+            <div class="mt-5 pt-4 border-t border-outline-variant">
+              <h4 class="text-sm font-semibold text-on-surface mb-2 flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-outline-variant">folder_shared</span>
+                Dokumen ({secDocs.length})
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {secDocs.map((d) => (
+                  <div class="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-lg border border-outline-variant">
+                    <span class="material-symbols-outlined text-outline-variant">description</span>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-medium text-on-surface truncate">{docLabel(d.fieldName)}</p>
+                      <p class="text-[11px] text-outline truncate">{d.originalFilename || docLabel(d.fieldName)}</p>
+                    </div>
+                    {d.r2Key && (
+                      <a href={`https://drive.google.com/file/d/${d.r2Key}/view`} target="_blank"
+                        class="inline-flex items-center gap-1 text-primary text-xs font-medium shrink-0">
+                        <span class="material-symbols-outlined text-sm">open_in_new</span> Lihat
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </Card>
     ))}
   </div>
@@ -95,9 +188,12 @@ const isSubmitted = user.profileStatus === 'pending' || user.profileStatus === '
     </a>
 
     {canSubmit && (
-      <button id="btn-submit" class="inline-flex items-center gap-2 px-8 py-3 text-base font-semibold text-white bg-primary rounded-xl hover:bg-primary shadow-lg transition">
+      <button id="btn-submit" disabled={totalMissing > 0} class:list={[
+        'inline-flex items-center gap-2 px-8 py-3 text-base font-semibold rounded-xl shadow-lg transition',
+        totalMissing > 0 ? 'bg-error-container/40 text-error cursor-not-allowed' : 'text-white bg-primary hover:bg-primary',
+      ]}>
         <span class="material-symbols-outlined text-xl">send</span>
-        Submit Profil
+        {totalMissing > 0 ? `Lengkapi ${totalMissing} kolom wajib` : 'Submit Profil'}
       </button>
     )}
     {isSubmitted && (

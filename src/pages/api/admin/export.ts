@@ -5,6 +5,7 @@ import { eq, inArray } from 'drizzle-orm';
 import * as schema from '../../../db/schema';
 import { users, identitasPribadi, riwayatPendidikan, prestasiTahfidz, identitasKeluarga, kondisiRumah, domisiliOrtu, kebutuhanKhusus, dokumen } from '../../../db/schema';
 import { verifyGardaToken } from '../../../lib/auth';
+import { parsePrestasiList } from '../../../lib/field-display';
 
 export const GET: APIRoute = async ({ request, locals }) => {
   const gardaAdmin = await verifyGardaToken(
@@ -72,8 +73,15 @@ export const GET: APIRoute = async ({ request, locals }) => {
         s2?.lulusTahun || '', s2?.lulusJalur || '',
         s2?.kategoriUkt || '', s2?.nominalUkt ? String(s2.nominalUkt) : '',
         s2?.fakultas || '', s2?.prodi || '',
-        s3?.namaLomba || '', s3?.jenisLomba || '', s3?.tingkatLomba || '',
-        s3?.predikatJuara || '', s3?.jumlahJuzz ? String(s3.jumlahJuzz) : '',
+        // Prestasi & tahfidz — gabung SEMUA prestasi dari prestasiList (fix 3→1)
+        (() => {
+          const prestasi = parsePrestasiList(s3);
+          const names = prestasi.map((p) => p.namaLomba).filter(Boolean).join('; ');
+          const detail = prestasi.map((p) =>
+            [p.jenisLomba, p.tingkatLomba, p.predikatJuara].filter(Boolean).join(' ')
+          ).filter(Boolean).join('; ');
+          return [names, detail, s3?.jumlahJuzz ? String(s3.jumlahJuzz) : ''];
+        })(),
         s4?.namaAyah || '', s4?.statusAyah || '', s4?.penghasilanAyah ? String(s4.penghasilanAyah) : '',
         s4?.namaIbu || '', s4?.statusIbu || '', s4?.penghasilanIbu ? String(s4.penghasilanIbu) : '',
         s4?.nomorKk || '', s4?.jumlahTanggungan ? String(s4.jumlahTanggungan) : '',

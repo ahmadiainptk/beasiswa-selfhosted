@@ -5,6 +5,7 @@
 
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from "pdf-lib";
 import { LOGO_B64 } from "./kop-logo.ts";
+import { parsePrestasiList } from "./field-display.ts";
 
 // Bahasa Indonesia label map per Drizzle column name across all 7 sections
 const LABEL_MAP: Record<string, string> = {
@@ -199,9 +200,27 @@ export async function generateFormulirPdf(data: FormulirData): Promise<Uint8Arra
     drawSectionTitle(section.title);
     const fields = SEC_FIELDS[si] || [];
     const row = section.data || {};
-    for (const key of fields) {
-      const value = row[key];
-      drawLabelValue(humanize(key), formatValue(key, value));
+    if (si === 2) {
+      // Section 3 (0-indexed) = Prestasi & Tahfidz — render SEMUA prestasi (fix 3→1)
+      const prestasi = parsePrestasiList(row);
+      if (prestasi.length === 0) {
+        drawLabelValue("Prestasi", "-");
+      } else {
+        ensureSpace(prestasi.length * 16 + 20);
+        for (const it of prestasi) {
+          const detail = [it.jenisLomba, it.tingkatLomba, it.predikatJuara].filter(Boolean).join(", ");
+          page.drawText(`• ${it.namaLomba || "-"}${detail ? " — " + detail : ""}`, {
+            x: MARGIN + 4, y: y, size: 10, font: bold, color: color.text,
+          });
+          y -= 15;
+        }
+      }
+      drawLabelValue("Jumlah Juzz (Tahfidz)", formatValue("jumlahJuzz", row.jumlahJuzz));
+    } else {
+      for (const key of fields) {
+        const value = row[key];
+        drawLabelValue(humanize(key), formatValue(key, value));
+      }
     }
     y -= 8;
   }
