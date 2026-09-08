@@ -8,6 +8,8 @@ import { eq } from 'drizzle-orm';
 import * as schema from '../../../db/schema';
 import { users, identitasPribadi, riwayatPendidikan, prestasiTahfidz, identitasKeluarga, kondisiRumah, domisiliOrtu, kebutuhanKhusus, dokumen, pendaftaran, beasiswa } from '../../../db/schema';
 import { verifyGardaToken } from "../../../lib/auth";
+import { formatLabel, formatValue } from '../../../lib/field-display';
+import { docLabel, BAGIAN_SECTION } from '../../../lib/doc-labels';
 
 const gardaAdmin = await verifyGardaToken(
   (Astro.locals as any).gardaCookies || Astro.request.headers.get("cookie"),
@@ -38,6 +40,16 @@ const [s1, s2, s3, s4, s5, s6, s7] = await Promise.all([
 
 const docs = await db.select().from(dokumen).where(eq(dokumen.userId, id));
 
+// Group archived documents by their form section number (bagian) so each renders with
+// its own step, instead of being merged into a single block at the bottom.
+const docsByNum = new Map<number, typeof docs>();
+for (const d of docs) {
+  const num = BAGIAN_SECTION[d.bagian]?.num;
+  if (!num) continue;
+  if (!docsByNum.has(num)) docsByNum.set(num, []);
+  docsByNum.get(num)!.push(d);
+}
+
 const daftarList = await db.select({
   id: pendaftaran.id, status: pendaftaran.status, catatanAdmin: pendaftaran.catatanAdmin,
   createdAt: pendaftaran.createdAt, beasiswaNama: beasiswa.nama,
@@ -62,81 +74,6 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 };
 const st = statusConfig[mhs.profileStatus] || { label: mhs.profileStatus, color: 'slate' };
 
-// Label maps untuk format teks yang baku
-const labelMap: Record<string, string> = {
-  nama: 'Nama', nik: 'NIK', nim: 'NIM', namaLengkap: 'Nama Lengkap',
-  tempatLahir: 'Tempat Lahir', tanggalLahir: 'Tanggal Lahir',
-  jenisKelamin: 'Jenis Kelamin', golonganDarah: 'Golongan Darah',
-  agama: 'Agama', noHp: 'No HP', email: 'Email',
-  anakKe: 'Anak ke-', jumlahSaudara: 'Jumlah Saudara',
-  provinsi: 'Provinsi', kabupaten: 'Kabupaten / Kota',
-  kecamatan: 'Kecamatan', kelurahan: 'Kelurahan / Desa',
-  alamat: 'Alamat', rtRw: 'RT / RW', kodePos: 'Kode Pos',
-  noKip: 'No KIP', penerimaPkh: 'Penerima PKH', penerimaKjp: 'Penerima KJP',
-  // Riwayat Pendidikan
-  jenisSekolah: 'Jenis Sekolah', nisn: 'NISN', npsn: 'NPSN',
-  namaSekolah: 'Nama Sekolah', alamatSekolah: 'Alamat Sekolah',
-  lulusTahun: 'Tahun Lulus', lulusJalur: 'Jalur Kelulusan',
-  jurusan: 'Jurusan', kategoriUkt: 'Kategori UKT', nominalUkt: 'Nominal UKT',
-  nomorTes: 'Nomor Tes', fakultas: 'Fakultas', prodi: 'Program Studi',
-  // Prestasi
-  namaLomba: 'Nama Lomba', jenisLomba: 'Jenis Lomba',
-  tingkatLomba: 'Tingkat Lomba', predikatJuara: 'Predikat Juara',
-  jumlahJuzz: 'Jumlah Juzz',
-  // Keluarga
-  namaAyah: 'Nama Ayah', nikAyah: 'NIK Ayah', statusAyah: 'Status Ayah',
-  noTelpAyah: 'No Telp Ayah', pendidikanAyah: 'Pendidikan Ayah',
-  pekerjaanAyah: 'Pekerjaan Ayah', penghasilanAyah: 'Penghasilan Ayah',
-  namaIbu: 'Nama Ibu', nikIbu: 'NIK Ibu', statusIbu: 'Status Ibu',
-  noTelpIbu: 'No Telp Ibu', pendidikanIbu: 'Pendidikan Ibu',
-  pekerjaanIbu: 'Pekerjaan Ibu', penghasilanIbu: 'Penghasilan Ibu',
-  nomorKk: 'Nomor KK', jumlahTanggungan: 'Jumlah Tanggungan',
-  jumlahHutang: 'Jumlah Hutang', cicilanHutang: 'Cicilan Hutang',
-  jumlahPiutang: 'Jumlah Piutang', cicilanPiutang: 'Cicilan Piutang',
-  // Rumah
-  luasTanah: 'Luas Tanah', kepemilikanRumah: 'Kepemilikan Rumah',
-  biayaSewa: 'Biaya Sewa', tanahLain: 'Tanah Lain', statusTanahLain: 'Status Tanah Lain',
-  dayaListrik: 'Daya Listrik', statusListrik: 'Status Listrik',
-  biayaListrik1: 'Biaya Listrik (1)', biayaListrik2: 'Biaya Listrik (2)', biayaListrik3: 'Biaya Listrik (3)',
-  // Domisili
-  provinsiAyah: 'Provinsi Ayah', kabupatenAyah: 'Kabupaten Ayah',
-  kecamatanAyah: 'Kecamatan Ayah', kelurahanAyah: 'Kelurahan Ayah',
-  alamatAyah: 'Alamat Ayah', rtRwAyah: 'RT / RW Ayah', kodePosAyah: 'Kode Pos Ayah', gmapAyah: 'Google Maps Ayah',
-  provinsiIbu: 'Provinsi Ibu', kabupatenIbu: 'Kabupaten Ibu',
-  kecamatanIbu: 'Kecamatan Ibu', kelurahanIbu: 'Kelurahan Ibu',
-  alamatIbu: 'Alamat Ibu', rtRwIbu: 'RT / RW Ibu', kodePosIbu: 'Kode Pos Ibu', gmapIbu: 'Google Maps Ibu',
-  namaWali: 'Nama Wali', nikWali: 'NIK Wali', noTelpWali: 'No Telp Wali',
-  hubunganWali: 'Hubungan Wali', pendidikanWali: 'Pendidikan Wali',
-  pekerjaanWali: 'Pekerjaan Wali', penghasilanWali: 'Penghasilan Wali',
-  provinsiWali: 'Provinsi Wali', kabupatenWali: 'Kabupaten Wali',
-  kecamatanWali: 'Kecamatan Wali', kelurahanWali: 'Kelurahan Wali',
-  alamatWali: 'Alamat Wali', rtRwWali: 'RT / RW Wali', kodePosWali: 'Kode Pos Wali', gmapWali: 'Google Maps Wali',
-  // Kebutuhan Khusus
-  penyandangDisabilitas: 'Penyandang Disabilitas', jenisDisabilitas: 'Jenis Disabilitas',
-};
-
-function formatLabel(key: string): string {
-  return labelMap[key] || key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ').trim();
-}
-
-function formatValue(key: string, value: any): string {
-  if (value === null || value === undefined || value === '') return '-';
-  if (key === 'penghasilanAyah' || key === 'penghasilanIbu' || key === 'penghasilanWali' ||
-      key === 'nominalUkt' || key === 'biayaSewa' || key === 'biayaListrik1' || key === 'biayaListrik2' || key === 'biayaListrik3' ||
-      key === 'jumlahHutang' || key === 'cicilanHutang' || key === 'jumlahPiutang' || key === 'cicilanPiutang') {
-    const n = Number(value);
-    if (n === 0) return 'Rp 0';
-    return 'Rp ' + n.toLocaleString('id-ID');
-  }
-  if (key === 'penerimaPkh' || key === 'penerimaKjp') {
-    return value === 1 || value === '1' ? 'Ya' : 'Tidak';
-  }
-  if (key === 'penyandangDisabilitas') {
-    return value === 1 || value === '1' ? 'Ya' : 'Tidak';
-  }
-  if (key === 'jenisKelamin') return value === 'L' ? 'Laki-laki' : value === 'P' ? 'Perempuan' : String(value);
-  return String(value);
-}
 ---
 
 <AdminLayout title="Detail Profil" namaUser={admin.namaLengkap} userRole={admin.role} activeMenu="pendaftaran">
@@ -187,7 +124,7 @@ function formatValue(key: string, value: any): string {
 
   <!-- Sections -->
   <div class="space-y-6 mb-8">
-    {sections.map((section) => (
+    {sections.map((section, idx) => (
       <Card>
         <h3 class="text-lg font-semibold text-on-surface mb-4">{section.title}</h3>
         {section.data ? (
@@ -205,31 +142,38 @@ function formatValue(key: string, value: any): string {
         ) : (
           <p class="text-sm text-outline italic">Belum diisi</p>
         )}
+        {(() => {
+          const secDocs = docsByNum.get(idx + 1);
+          if (!secDocs || secDocs.length === 0) return null;
+          return (
+            <div class="mt-5 pt-4 border-t border-outline-variant">
+              <h4 class="text-sm font-semibold text-on-surface mb-2 flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-outline-variant">folder_shared</span>
+                Dokumen ({secDocs.length})
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {secDocs.map((d) => (
+                  <div class="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-lg border border-outline-variant">
+                    <span class="material-symbols-outlined text-outline-variant">description</span>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-sm font-medium text-on-surface truncate">{docLabel(d.fieldName)}</p>
+                      <p class="text-[11px] text-outline truncate">{d.originalFilename || docLabel(d.fieldName)}</p>
+                    </div>
+                    {d.r2Key && (
+                      <a href={`https://drive.google.com/file/d/${d.r2Key}/view`} target="_blank"
+                        class="inline-flex items-center gap-1 text-primary text-xs font-medium shrink-0">
+                        <span class="material-symbols-outlined text-sm">open_in_new</span> Lihat
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </Card>
     ))}
   </div>
-
-  <!-- Dokumen -->
-  {docs.length > 0 && (
-    <Card class="mb-8">
-      <h3 class="text-lg font-semibold text-on-surface mb-4">Dokumen ({docs.length})</h3>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {docs.map((d) => (
-          <div class="flex items-center gap-3 p-3 bg-surface bg-surface-container-lowest rounded-lg">
-            <span class="material-symbols-outlined text-outline-variant">description</span>
-            <div class="flex-1 min-w-0">
-              <p class="text-xs font-medium text-on-surface truncate">{d.originalFilename || d.fieldName}</p>
-              <p class="text-[10px] text-outline">{d.fieldName} ({d.bagian})</p>
-            </div>
-            {d.r2Key && (
-              <a href={`https://drive.google.com/file/d/${d.r2Key}/view`} target="_blank"
-                class="text-primary hover:text-primary text-xs font-medium">Lihat</a>
-            )}
-          </div>
-        ))}
-      </div>
-    </Card>
-  )}
 
   <!-- Pendaftaran Beasiswa -->
   {daftarList.length > 0 && (

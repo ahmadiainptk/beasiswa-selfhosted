@@ -50,6 +50,7 @@ export const MATERIAL_ICONS = [
   "expand_more",
   "family_restroom",
   "folder",
+  "folder_shared",
   "group",
   "home",
   "how_to_reg",
