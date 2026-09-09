@@ -867,13 +867,11 @@ const currentStepConfig = steps[step - 1];
               </div>
             </div>
 
-            <!-- UKT & Prodi — sementara dinonaktifkan, belum terhubung sistem -->
-            {
-              false && (
-                <div>
-                  <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
-                    UKT & Prodi
-                  </h3>
+            <!-- UKT & Prodi — wajib diisi (kategori UKT & nominal UKT) -->
+            <div>
+              <h3 class="text-lg font-semibold text-on-surface pt-4 border-t border-outline-variant">
+                UKT & Prodi
+              </h3>
                   <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label class="block text-sm font-medium text-on-surface-variant mb-1.5">
@@ -915,8 +913,6 @@ const currentStepConfig = steps[step - 1];
                     </div>
                   </div>
                 </div>
-              )
-            }
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>

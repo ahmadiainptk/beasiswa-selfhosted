@@ -65,7 +65,7 @@ const canSubmit = user.profileStatus === 'incomplete' || user.profileStatus === 
 const isSubmitted = user.profileStatus === 'pending' || user.profileStatus === 'verified';
 
 // Validasi kolom wajib per section — kolom yang belum terisi akan tampil MERAH & submit disabled.
-const missingBySection = sections.map((sec, i) => missingKeysForSection(sec.data, i));
+const missingBySection = sections.map((sec, i) => missingKeysForSection(sec.data, i, { keluarga: s4[0] }));
 const totalMissing = missingBySection.reduce((sum, arr) => sum + arr.length, 0);
 const missingSet = new Set<string>();
 missingBySection.forEach((arr) => arr.forEach((k) => missingSet.add(k)));

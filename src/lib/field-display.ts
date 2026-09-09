@@ -112,16 +112,25 @@ export function isEmptyValue(value: any): boolean {
 }
 
 // Apakah kolom ini wajib diisi (untuk row section yang diberikan). Wali = kondisional.
-export function isFieldRequired(key: string, row: any): boolean {
+// ctx.keluarga = row identitas_keluarga (utk cek status ayah/ibu) — hanya gmap wali yang butuh.
+export function isFieldRequired(key: string, row: any, ctx?: any): boolean {
+  // gmap Wali hanya WAJIB jika ayah DAN ibu sudah meninggal (wali jadi pengganti ortu).
+  if (key === 'gmapWali') {
+    const k = ctx?.keluarga;
+    if (!k) return false;
+    const ayahMeninggal = String(k.statusAyah || '').toLowerCase() === 'meninggal';
+    const ibuMeninggal = String(k.statusIbu || '').toLowerCase() === 'meninggal';
+    return ayahMeninggal && ibuMeninggal;
+  }
   if (REQUIRED_KEYS.has(key)) return true;
   if (WALI_KEYS.has(key) && row && (row.namaWali || row.hubunganWali)) return true;
   return false;
 }
 
 // Kolom wajib yang BELUM terisi untuk satu row. Return array of keys.
-export function missingRequiredKeys(row: any, sectionKeys: string[]): string[] {
-  if (!row) return sectionKeys.filter((k) => isFieldRequired(k, row));
-  return sectionKeys.filter((k) => isFieldRequired(k, row) && isEmptyValue(row[k]));
+export function missingRequiredKeys(row: any, sectionKeys: string[], ctx?: any): string[] {
+  if (!row) return sectionKeys.filter((k) => isFieldRequired(k, row, ctx));
+  return sectionKeys.filter((k) => isFieldRequired(k, row, ctx) && isEmptyValue(row[k]));
 }
 
 // Daftar kolom wajib per section (index 0..6), untuk validasi review.
